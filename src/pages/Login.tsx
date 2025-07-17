@@ -1,144 +1,106 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { login } from '../services/api';
+import { FiArrowRight, FiEye, FiEyeOff } from 'react-icons/fi';
+import logo from '../assets/logo.png';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isRegister, setIsRegister] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(true);
+  const [agree, setAgree] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
-      localStorage.setItem('token', 'fake-token');
-      navigate('/');
-    } else {
-      alert('Vui lòng nhập đầy đủ thông tin.');
+    if (!agree) {
+      alert("Bạn cần đồng ý với điều khoản để đăng nhập.");
+      return;
     }
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
     if (email && password) {
-      localStorage.setItem('token', 'fake-token');
-      alert('Đăng ký thành công! Vui lòng đăng nhập..');
-      setIsRegister(false);
+      setLoading(true);
+      try {
+        const data = await login({ email, password });
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userId', data.data.user._id); // Sửa ở đây
+        navigate('/');
+      } catch (error: any) {
+        alert(error?.response?.data?.message || 'Đăng nhập thất bại.');
+      } finally {
+        setLoading(false);
+      }
     } else {
       alert('Vui lòng nhập đầy đủ thông tin.');
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-white px-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 w-full max-w-4xl bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="flex items-center justify-center p-6 bg-white">
-          <img src="./src/assets/logo.png" alt="Logo" className="w-64 h-64 object-contain" />
-        </div>
-        <div className="p-6 flex flex-col justify-center w-full">
-
-          {isRegister ? (
-            <>
-              <h2 className="text-2xl font-bold mb-4 text-left">ĐĂNG KÝ</h2>
-              
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Tên</label>
-                  <input type="text" className="w-full p-2 border rounded" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Họ</label>
-                  <input type="text" className="w-full p-2 border rounded" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-2 border rounded text-sm"
-                    placeholder="Nhâp mật khẩu của bạn"
-                    required
-                  />
-                  <div>
-                    <p className="text-sm">
-                      <span className="text-red-500">* </span>Tối thiểu 8 ký tự, bao gồm ít nhất một chữ hoa, một chữ thường, một ký tự đặc biệt và một chữ số</p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <input type="checkbox" className="mr-2" />
-                  <label className="text-sm">Khi đăng nhập, bạn đồng ý với Điều khoản & Điều kiện của chúng tôi.</label>
-                </div>
-                <div className="flex items-center">
-                  <input type="checkbox" className="mr-2" />
-                  <label className="text-sm">Duy trì đăng nhập</label>
-                </div>
-                <button type="submit" className="w-full bg-blue-950 text-white p-2 rounded">ĐĂNG KÝ</button>
-                <p className="text-center mt-4">
-                  Bạn đã có tài khoản?{' '}
-                  <span className="text-blue-600 cursor-pointer" onClick={() => setIsRegister(false)}>Đăng nhập</span>
-                </p>
-              </form>
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-bold mb-4 text-start">ĐĂNG NHẬP</h2>
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Email</label>
-                  <input
-                    type="email"
-                    placeholder='Nhâp email của bạn'
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Password</label>
-                  <input
-                    type="password"
-                    placeholder="Nhâp mật khẩu của bạn"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input type="checkbox" className="mr-2" />
-                  <label className="text-sm">Duy trì đăng nhập </label>
-
-                </div>
-                {/* <p className="text-right mb-4">Forgot your password?</p> */}
-                <button type="submit" className="w-full bg-blue-950 text-white p-2 rounded">ĐĂNG NHẬP</button>
-              </form>
-              <div className="flex justify-center space-x-4 mt-4">
-                <button className="w-40 h-14 flex items-center justify-center border border-gray-300 rounded-lg hover:shadow-md transiton"><img src="https://www.google.com/favicon.ico" alt="Google" className="w-6 h-6" /></button>
-                <button className="w-40 h-14 flex items-center justify-center border border-gray-300 rounded-lg hover:shadow-md transiton"><img src="https://www.apple.com/favicon.ico" alt="Apple" className="w-6 h-6" /></button>
-                <button className="w-40 h-14 flex items-center justify-center border border-gray-300 rounded-lg hover:shadow-md transiton"><img src="https://www.facebook.com/favicon.ico" alt="Facebook" className="w-6 h-6" /></button>
-              </div>
-              <p className="text-center mt-4">
-                Bằng cách nhấp vào 'Đăng nhập', bạn đồng ý với Điều khoản & Điều kiện của trang web của chúng tôi.
-              </p>
-              <p className="text-center mt-4">
-               Bạn chưa có tài khoản?{' '}
-                <span className="text-blue-600 cursor-pointer" onClick={() => setIsRegister(true)}>Đăng ký</span>
-              </p>
-            </>
-          )}
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#fcfcfc]">
+      <div className="w-full max-w-md flex flex-col items-center">
+        <img src={logo} alt="Logo" className="w-48 h-48 object-contain mb-6 mt-2" />
+        <h2 className="text-3xl font-bold mb-8 text-gray-900">Đăng nhập</h2>
+        <form onSubmit={handleLogin} className="space-y-6 w-full">
+          <div>
+            <input
+              type="email"
+              placeholder="Email "
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full border border-gray-400 rounded px-4 py-3 text-base focus:outline-none focus:border-green-500"
+              required
+            />
+          </div>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Mật khẩu"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full border border-gray-400 rounded px-4 py-3 text-base focus:outline-none focus:border-green-500 pr-12"
+              required
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 focus:outline-none"
+              onClick={() => setShowPassword((v) => !v)}
+            >
+              {showPassword ? <FiEyeOff size={22} /> : <FiEye size={22} />}
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={keepLoggedIn}
+                onChange={() => setKeepLoggedIn(!keepLoggedIn)}
+                className="mr-2 accent-green-600"
+              />
+              Ghi nhớ đăng nhập
+            </label>
+            <a href="#" className="text-gray-500 hover:underline">Quên mật khẩu?</a>
+          </div>
+          <button
+            type="submit"
+            className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded transition uppercase tracking-wide text-base"
+            disabled={loading || !agree}
+          >
+            {loading ? 'Đang đăng nhập...' : (<><span>ĐĂNG NHẬP</span> <FiArrowRight size={20} /></>)}
+          </button>
+          <div className="flex items-start text-sm mt-2">
+            <input
+              type="checkbox"
+              checked={agree}
+              onChange={() => setAgree(!agree)}
+              className="mr-2 accent-green-600 mt-1 cursor-pointer"
+            />
+            <span>
+              Bằng việc nhấn 'Đăng nhập' bạn đã đồng ý với <a href="#" className="underline font-medium">Điều khoản & Chính sách</a> của chúng tôi.
+            </span>
+          </div>
+        </form>
       </div>
     </div>
   );

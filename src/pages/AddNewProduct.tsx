@@ -1,48 +1,76 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { createProduct, getBrands, getCategories } from '../services/api';
 import { Link } from 'react-router-dom';
 
 interface ProductInput {
   nameProduct: string;
   priceProduct: number;
   quantity: number;
+  image: string;
+  status: string;
+  idBrand: string;
+  idCategory: string;
+  description: string;
 }
 
 const AddNewProduct: React.FC = () => {
-  const [product, setProduct] = useState<ProductInput>({ nameProduct: '', priceProduct: 0, quantity: 0 });
+  const [product, setProduct] = useState<ProductInput>({
+    nameProduct: '',
+    priceProduct: 0,
+    quantity: 0,
+    image: '',
+    status: 'active',
+    idBrand: '',
+    idCategory: '',
+    description: '',
+  });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const { data: brands = [], isLoading: isLoadingBrands } = useQuery({ queryKey: ['brands'], queryFn: getBrands });
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({ queryKey: ['categories'], queryFn: getCategories });
+
+  const mutation = useMutation({
+    mutationFn: (data: ProductInput) => createProduct(data),
+    onSuccess: () => {
+      setSuccess('Thêm sản phẩm thành công!');
+      setProduct({
+        nameProduct: '',
+        priceProduct: 0,
+        quantity: 0,
+        image: '',
+        status: 'active',
+        idBrand: '',
+        idCategory: '',
+        description: '',
+      });
+      setError(null);
+    },
+    onError: (err: any) => {
+      setError('Lỗi khi thêm sản phẩm: ' + (err?.response?.data?.message || 'Không xác định'));
+      setSuccess(null);
+    }
+  });
 
   const validateInput = (): string | null => {
     if (!product.nameProduct.trim()) return 'Tên sản phẩm không được để trống';
     if (product.priceProduct <= 0) return 'Giá sản phẩm phải lớn hơn 0';
     if (product.quantity < 0) return 'Số lượng không được âm';
+    if (!product.idBrand) return 'Vui lòng chọn thương hiệu';
+    if (!product.idCategory) return 'Vui lòng chọn danh mục';
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validationError = validateInput();
     if (validationError) {
       setError(validationError);
+      setSuccess(null);
       return;
     }
-
-    try {
-      const response = await axios.post('/api/v1/products', product, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.data.status === 'thành công') {
-        setSuccess('Thêm sản phẩm thành công!');
-        setProduct({ nameProduct: '', priceProduct: 0, quantity: 0 });
-        setError(null);
-      } else {
-        setError('Thêm sản phẩm thất bại');
-      }
-    } catch (err) {
-      setError('Lỗi khi thêm sản phẩm: ' + (err as Error).message);
-      console.error('Error adding product:', err);
-    }
+    mutation.mutate(product);
   };
 
   return (
@@ -91,11 +119,47 @@ const AddNewProduct: React.FC = () => {
               min="0"
             />
           </div>
+          <div>
+            <label className="block text-gray-700">Thương hiệu</label>
+            <select
+              value={product.idBrand}
+              onChange={(e) => setProduct({ ...product, idBrand: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">{isLoadingBrands ? 'Đang tải...' : 'Chọn thương hiệu'}</option>
+              {brands.map((brand: any) => (
+                <option key={brand._id} value={brand._id}>{brand.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-gray-700">Danh mục</label>
+            <select
+              value={product.idCategory}
+              onChange={(e) => setProduct({ ...product, idCategory: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">{isLoadingCategories ? 'Đang tải...' : 'Chọn danh mục'}</option>
+              {categories.map((cat: any) => (
+                <option key={cat._id} value={cat._id}>{cat.nameCategory}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-gray-700">Mô tả</label>
+            <textarea
+              value={product.description}
+              onChange={(e) => setProduct({ ...product, description: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded-lg"
+              placeholder="Mô tả sản phẩm"
+            />
+          </div>
           <button
             type="submit"
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+            disabled={mutation.isPending}
           >
-            Thêm Sản phẩm
+            {mutation.isPending ? 'Đang thêm...' : 'Thêm Sản phẩm'}
           </button>
         </form>
       </div>

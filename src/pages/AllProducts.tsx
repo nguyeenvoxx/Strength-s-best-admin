@@ -1,70 +1,88 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getProducts, deleteProduct } from '../services/api';
 import { Link } from 'react-router-dom';
 
 interface Product {
   _id: string;
   nameProduct: string;
   priceProduct: number;
+  quantity: number;
+  image: string;
+  status: string;
 }
 
 const AllProducts: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await axios.get('/api/v1/products', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (response.data.status === 'thành công' && Array.isArray(response.data.data.products)) {
-          setProducts(response.data.data.products);
-        } else {
-          setError('Dữ liệu không hợp lệ từ API');
-        }
-      } catch (err) {
-        setError('Lỗi khi lấy danh sách sản phẩm: ' + (err as Error).message);
-        console.error('Error fetching products:', err);
-      }
-    };
-    fetchProducts();
-  }, []);
+  const { data: products = [], isLoading, error } = useQuery<Product[]>({
+    queryKey: ['products'],
+    queryFn: getProducts,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này không?')) {
+      deleteMutation.mutate(id);
+    }
+  };
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
       <header className="bg-white p-4 shadow mb-4 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Tất cả Sản phẩm</h1>
-        <div>
-          <Link to="/all-products" className="text-blue-600 hover:underline mr-4">Tất cả Sản phẩm</Link>
-          <Link to="/add-new-product" className="text-blue-600 hover:underline">Thêm Sản phẩm mới</Link>
-        </div>
+        <Link to="/add-new-product" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+          Thêm Sản phẩm mới
+        </Link>
       </header>
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+
+      {isLoading && <p>Đang tải sản phẩm...</p>}
+      {error && <p className="text-red-500">Lỗi: {error.message}</p>}
+      
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">Danh sách Sản phẩm</h2>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="min-w-full bg-white">
             <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2 text-left">Tên sản phẩm</th>
-                <th className="border p-2 text-left">Giá</th>
+              <tr>
+                <th className="py-2 px-4 border-b">Ảnh</th>
+                <th className="py-2 px-4 border-b">Tên sản phẩm</th>
+                <th className="py-2 px-4 border-b">Giá</th>
+                <th className="py-2 px-4 border-b">Số lượng</th>
+                <th className="py-2 px-4 border-b">Trạng thái</th>
+                <th className="py-2 px-4 border-b">Hành động</th>
               </tr>
             </thead>
             <tbody>
               {products.map((product) => (
-                <tr key={product._id} className="hover:bg-gray-100">
-                  <td className="border p-2">{product.nameProduct}</td>
-                  <td className="border p-2">{product.priceProduct} VND</td>
+                <tr key={product._id}>
+                  <td className="py-2 px-4 border-b">
+                    <img src={`/assets/${product.image}`} alt={product.nameProduct} className="w-16 h-16 object-cover rounded" />
+                  </td>
+                  <td className="py-2 px-4 border-b">{product.nameProduct}</td>
+                  <td className="py-2 px-4 border-b">{product.priceProduct.toLocaleString('vi-VN')} VND</td>
+                  <td className="py-2 px-4 border-b">{product.quantity}</td>
+                  <td className="py-2 px-4 border-b">{product.status}</td>
+                  <td className="py-2 px-4 border-b">
+                    <button
+                      onClick={() => handleDelete(product._id)}
+                      className="text-red-600 hover:underline"
+                      disabled={deleteMutation.isPending}
+                    >
+                      Xóa
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      <footer className="text-center text-gray-500 text-sm mt-4">
-        © 2023 - pulstron Dashboard
-      </footer>
     </div>
   );
 };

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import React, { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Chart from 'chart.js/auto';
+import { getAdminDashboard } from '../services/api';
 
 interface DashboardStats {
   totalUsers: number;
@@ -9,41 +10,70 @@ interface DashboardStats {
   revenueByTime: { label: string; revenue: number }[];
 }
 
+const formatDateLabel = (label: string, filterType: string) => {
+  if (!label) return '';
+  if (filterType === 'day') {
+    // label là yyyy-MM-dd hoặc ISO, chuyển sang dd/MM/yyyy
+    const d = new Date(label);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('vi-VN');
+    }
+    return label;
+  }
+  if (filterType === 'month') {
+    // label là yyyy-MM, chuyển sang MM/yyyy
+    const [year, month] = label.split('-');
+    if (year && month) return `${month}/${year}`;
+    return label;
+  }
+  if (filterType === 'year') {
+    return label;
+  }
+  return label;
+};
+
+const formatVND = (value: number) => {
+  return value.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+};
+
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [filterType, setFilterType] = useState<'day' | 'month' | 'year'>('day');
-  const [selectedDate, setSelectedDate] = useState('');
   const chartRef = useRef<Chart | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await axios.get('/api/v1/admin/dashboard', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          params: {
-            filterType,
-            date: selectedDate || undefined
-          }
-        });
-        setStats(response.data.data);
-        updateChart(response.data.data.revenueByTime);
-      } catch (err) {
-        console.error('Error fetching dashboard stats:', err);
-      }
-    };
-    fetchStats();
-  }, [filterType, selectedDate]);
+  const { data: stats, error, isLoading } = useQuery<DashboardStats, Error>({
+    queryKey: ['dashboardStats', filterType],
+    queryFn: () => getAdminDashboard({ filterType }),
+  });
 
-  const updateChart = (data: { label: string; revenue: number }[]) => {
+  useEffect(() => {
+    if (stats?.revenueByTime) {
+      updateChart(stats.revenueByTime, filterType);
+    }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats, filterType]);
+
+  const updateChart = (data: { label: string; revenue: number }[], filterType: string) => {
     if (chartRef.current) {
       chartRef.current.destroy();
     }
+    // Tính stepSize động dựa trên max doanh thu
+    let maxRevenue = 0;
+    data.forEach(d => {
+      if (typeof d.revenue === 'number' && d.revenue > maxRevenue) maxRevenue = d.revenue;
+    });
+    let stepSize = 1000000; // 1 triệu
+    if (maxRevenue < 10000000) stepSize = 1000000;
+    else if (maxRevenue < 100000000) stepSize = 5000000;
+    else if (maxRevenue < 1000000000) stepSize = 10000000;
+    else stepSize = 100000000;
+    if (maxRevenue === 0) stepSize = 1000000;
+
     if (canvasRef.current) {
       chartRef.current = new Chart(canvasRef.current, {
         type: 'bar',
         data: {
-          labels: data.map(d => d.label),
+          labels: data.map(d => formatDateLabel(d.label, filterType)),
           datasets: [{
             label: 'Doanh thu (VND)',
             data: data.map(d => d.revenue),
@@ -56,12 +86,47 @@ const Dashboard: React.FC = () => {
           scales: {
             y: {
               beginAtZero: true,
-              title: { display: true, text: 'Doanh thu (VND)' }
+              min: 0,
+              ticks: {
+                stepSize,
+                callback: function(value) {
+                  let num: number = 0;
+                  if (typeof value === 'number') {
+                    num = value;
+                  } else if (typeof value === 'string') {
+                    const parsed = parseFloat(value);
+                    num = isNaN(parsed) ? 0 : parsed;
+                  }
+                  return formatVND(num);
+                }
+              },
+              title: { display: true, text: 'Doanh thu (VND)' },
             },
-            x: { title: { display: true, text: 'Thời gian' } }
+            x: {
+              title: { display: true, text: 'Thời gian' },
+              ticks: {
+                autoSkip: false,
+                callback: function(value, index, values) {
+                  // Hiển thị nhãn đúng, không lặp, không trống
+                  if (this.getLabelForValue) {
+                    return this.getLabelForValue(Number(value));
+                  }
+                  return value;
+                }
+              }
+            }
           },
           responsive: true,
-          maintainAspectRatio: false
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return formatVND(context.parsed.y);
+                }
+              }
+            }
+          }
         }
       });
     }
@@ -70,46 +135,38 @@ const Dashboard: React.FC = () => {
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Bảng điều khiển</h1>
-      <div className="mb-4 flex items-center space-x-4">
-      
-        {/* <input
-          type={filterType === 'day' ? 'date' : filterType === 'month' ? 'month' : 'year'}
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="p-2 border border-gray-300 rounded-lg"
-        /> */}
-      </div>
+      {isLoading && <p>Đang tải...</p>}
+      {error && <div className="text-red-500 mb-4">{error.message}</div>}
+      <div className="mb-4 flex items-center space-x-4"></div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-semibold text-gray-700">Tổng số người dùng</h2>
-          <p className="text-2xl text-blue-600 mt-2">{stats?.totalUsers || 0}</p>
+          <p className="text-2xl text-blue-600 mt-2">{stats?.totalUsers ?? 0}</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-semibold text-gray-700">Tổng số đơn hàng</h2>
-          <p className="text-2xl text-blue-600 mt-2">{stats?.totalOrders || 0}</p>
+          <p className="text-2xl text-blue-600 mt-2">{stats?.totalOrders ?? 0}</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-semibold text-gray-700">Tổng doanh thu</h2>
-          <p className="text-2xl text-blue-600 mt-2">{stats?.totalRevenue || 0} VND</p>
+          <p className="text-2xl text-blue-600 mt-2">{formatVND(stats?.totalRevenue ?? 0)}</p>
         </div>
       </div>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value as 'day' | 'month' | 'year')}
-          className="p-2 border border-gray-300 rounded-lg"
-        >
-          <option value="day">Theo ngày</option>
-          <option value="month">Theo tháng</option>
-          <option value="year">Theo năm</option>
-        </select>
+      <select
+        value={filterType}
+        onChange={(e) => setFilterType(e.target.value as 'day' | 'month' | 'year')}
+        className="p-2 border border-gray-300 rounded-lg"
+      >
+        <option value="day">Theo ngày</option>
+        <option value="month">Theo tháng</option>
+        <option value="year">Theo năm</option>
+      </select>
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Biểu đồ Doanh thu</h2>
         <div className="h-64">
           <canvas ref={canvasRef} id="revenueChart"></canvas>
         </div>
       </div>
-      
     </div>
   );
 };

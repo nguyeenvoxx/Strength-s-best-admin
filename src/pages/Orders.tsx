@@ -1,85 +1,81 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getOrders, deleteOrder } from '../services/api'; // Giả sử có hàm deleteOrder
 import { Link } from 'react-router-dom';
 
 interface Order {
   _id: string;
-  idUser: string;
+  idUser: {
+    _id: string;
+    name: string;
+    email: string;
+  };
   totalPrice: number;
   status: string;
+  createdAt: string;
 }
 
 const Orders: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const currentUserId = localStorage.getItem('userId'); // Lấy từ localStorage sau khi đăng nhập
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!currentUserId) {
-      setError('Không tìm thấy ID người dùng');
-      return;
+  const { data: orders = [], isLoading, error } = useQuery<Order[]>({
+    queryKey: ['orders'],
+    queryFn: getOrders
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteOrder(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: (err: any) => {
+      alert('Lỗi khi xóa đơn hàng: ' + (err?.response?.data?.message || err.message));
     }
-    const fetchOrders = async () => {
-      try {
-        const response = await axios.get(`/api/v1/orders?filter={"idUser":"${currentUserId}"}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (response.data.status === 'thành công' && Array.isArray(response.data.data.orders)) {
-          setOrders(response.data.data.orders);
-        } else {
-          setError('Dữ liệu không hợp lệ từ API');
-        }
-      } catch (err) {
-        setError('Lỗi khi lấy danh sách đơn hàng: ' + (err as Error).message);
-        console.error('Error fetching orders:', err);
-      }
-    };
-    fetchOrders();
-  }, [currentUserId]);
+  });
 
-  const handleDeleteOrder = async (_id: string) => {
-    if (window.confirm('Bạn có chắc muốn xóa đơn hàng này?')) {
-      try {
-        await axios.delete(`/api/v1/orders/${_id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        setOrders(orders.filter(o => o._id !== _id));
-      } catch (err) {
-        setError('Lỗi khi xóa đơn hàng: ' + (err as Error).message);
-        console.error('Error deleting order:', err);
-      }
+  const handleDelete = (id: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa đơn hàng này?')) {
+      deleteMutation.mutate(id);
     }
   };
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
       <header className="bg-white p-4 shadow mb-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Đơn hàng của tôi</h1>
-        <div>
-          <Link to="/order-list" className="text-blue-600 hover:underline mr-4">Xem Danh sách Đơn hàng</Link>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-800">Tất cả Đơn hàng</h1>
       </header>
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+      
+      {isLoading && <p>Đang tải đơn hàng...</p>}
+      {error && <p className="text-red-500">Lỗi: {(error as any).message}</p>}
+
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">Danh sách Đơn hàng</h2>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="min-w-full bg-white">
             <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2 text-left">Tổng giá</th>
-                <th className="border p-2 text-left">Trạng thái</th>
-                <th className="border p-2 text-left">Actions</th>
+              <tr>
+                <th className="py-2 px-4 border-b">ID Đơn hàng</th>
+                <th className="py-2 px-4 border-b">Tên Khách hàng</th>
+                <th className="py-2 px-4 border-b">Email</th>
+                <th className="py-2 px-4 border-b">Tổng tiền</th>
+                <th className="py-2 px-4 border-b">Trạng thái</th>
+                <th className="py-2 px-4 border-b">Ngày tạo</th>
+                <th className="py-2 px-4 border-b">Hành động</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((order) => (
-                <tr key={order._id} className="hover:bg-gray-100">
-                  <td className="border p-2">{order.totalPrice} VND</td>
-                  <td className="border p-2">{order.status}</td>
-                  <td className="border p-2">
+                <tr key={order._id}>
+                  <td className="py-2 px-4 border-b">{order._id}</td>
+                  <td className="py-2 px-4 border-b">{order.idUser?.name || 'N/A'}</td>
+                  <td className="py-2 px-4 border-b">{order.idUser?.email || 'N/A'}</td>
+                  <td className="py-2 px-4 border-b">{order.totalPrice.toLocaleString('vi-VN')} VND</td>
+                  <td className="py-2 px-4 border-b">{order.status}</td>
+                  <td className="py-2 px-4 border-b">{new Date(order.createdAt).toLocaleDateString('vi-VN')}</td>
+                  <td className="py-2 px-4 border-b">
                     <button
-                      onClick={() => handleDeleteOrder(order._id)}
-                      className="bg-red-500 text-white px-2 py-1 rounded-lg hover:bg-red-600"
+                      onClick={() => handleDelete(order._id)}
+                      className="text-red-600 hover:underline"
+                      disabled={deleteMutation.isPending}
                     >
                       Xóa
                     </button>
@@ -90,7 +86,6 @@ const Orders: React.FC = () => {
           </table>
         </div>
       </div>
- 
     </div>
   );
 };

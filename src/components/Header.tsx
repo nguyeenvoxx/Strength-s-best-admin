@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import searchIcon from '../assets/Search1.png';
+import notiIcon from '../assets/noti.png';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -33,8 +35,7 @@ const Header: React.FC<HeaderProps> = ({ onLogout }) => {
           className="text-gray-600 focus:outline-none"
           onClick={() => setIsSearchOpen(!isSearchOpen)}
         >
-               <img src="./src/assets/Search1.png" alt="Logo" className="w-5 h-5 mx-auto" />
-
+          <img src={searchIcon} alt="Tìm kiếm" className="w-5 h-5 mx-auto" />
         </button>
         {isSearchOpen && (
           <form onSubmit={handleSearch} className="absolute left-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-2 z-10">
@@ -52,7 +53,7 @@ const Header: React.FC<HeaderProps> = ({ onLogout }) => {
           className="text-gray-600 focus:outline-none"
           onClick={() => setIsNotificationOpen(!isNotificationOpen)}
         >
-        <img src="./src/assets/noti.png" alt="Logo" className="w-5 h-5 mx-auto" />
+          <img src={notiIcon} alt="Thông báo" className="w-5 h-5 mx-auto" />
         </button>
         {isNotificationOpen && (
           <div className="absolute right-0 mt-8 w-64 bg-white shadow-lg rounded-lg p-4 z-10" style={{ top: '100%' }}>
