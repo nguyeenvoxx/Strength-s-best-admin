@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import logo from '../assets/logo.png';
 
 const Sidebar: React.FC = () => {
@@ -32,6 +32,9 @@ const Sidebar: React.FC = () => {
         </NavLink>
         <NavLink to="/vouchers" className={({ isActive }) => `w-full text-left p-2 rounded flex items-center ${isActive ? 'bg-green-500 text-white' : 'hover:bg-gray-100'}`}>
           <span className="mr-2">🎟️</span> MÃ GIẢM GIÁ
+        </NavLink>
+        <NavLink to="/news" className={({ isActive }) => `w-full text-left p-2 rounded flex items-center ${isActive ? 'bg-green-500 text-white' : 'hover:bg-gray-100'}`}>
+          <span className="mr-2">📰</span> TIN TỨC
         </NavLink>
       </nav>
     </aside>

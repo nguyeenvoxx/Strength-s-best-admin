@@ -11,8 +11,10 @@ const Categories: React.FC = () => {
   const queryClient = useQueryClient();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const { data: categories = [], isLoading, error } = useQuery<Category[]>({
+  const { data: categories = [], isLoading, error: queryError } = useQuery<Category[]>({
     queryKey: ['categories'],
     queryFn: getCategories,
   });
@@ -41,12 +43,40 @@ const Categories: React.FC = () => {
   });
   
   const handleAdd = () => {
-    if (newCategoryName.trim()) createMutation.mutate(newCategoryName);
+    if (!newCategoryName.trim()) {
+      setError('Tên danh mục không được để trống');
+      setSuccess(null);
+      return;
+    }
+    createMutation.mutate(newCategoryName.trim(), {
+      onError: (err: any) => {
+        setError('Lỗi khi thêm danh mục: ' + (err?.response?.data?.message || 'Không xác định'));
+        setSuccess(null);
+      },
+      onSuccess: () => {
+        setSuccess('Thêm danh mục thành công!');
+        setError(null);
+      }
+    });
   };
 
   const handleUpdate = () => {
     if (editingCategory) {
-      updateMutation.mutate({ id: editingCategory._id, name: editingCategory.nameCategory });
+      if (!editingCategory.nameCategory.trim()) {
+        setError('Tên danh mục không được để trống');
+        setSuccess(null);
+        return;
+      }
+      updateMutation.mutate({ id: editingCategory._id, name: editingCategory.nameCategory.trim() }, {
+        onError: (err: any) => {
+          setError('Lỗi khi cập nhật danh mục: ' + (err?.response?.data?.message || 'Không xác định'));
+          setSuccess(null);
+        },
+        onSuccess: () => {
+          setSuccess('Cập nhật danh mục thành công!');
+          setError(null);
+        }
+      });
     }
   };
   
@@ -65,7 +95,9 @@ const Categories: React.FC = () => {
       </div>
       
       {isLoading && <p>Đang tải...</p>}
-      {error && <p className="text-red-500">Lỗi: {(error as any).message}</p>}
+      {queryError && <p className="text-red-500">Lỗi: {(queryError as any).message}</p>}
+      {error && <div className="text-red-500 mb-4 font-semibold">{error}</div>}
+      {success && <div className="text-green-500 mb-4 font-semibold">{success}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {categories.map((category) => (

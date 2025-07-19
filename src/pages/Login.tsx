@@ -23,8 +23,13 @@ const Login: React.FC = () => {
       setLoading(true);
       try {
         const data = await login({ email, password });
+        if (data.data.user.role !== 'admin') {
+          alert('Chỉ tài khoản admin mới được phép đăng nhập vào trang quản trị!');
+          setLoading(false);
+          return;
+        }
         localStorage.setItem('token', data.token);
-        localStorage.setItem('userId', data.data.user._id); // Sửa ở đây
+        localStorage.setItem('userId', data.data.user._id);
         navigate('/');
       } catch (error: any) {
         alert(error?.response?.data?.message || 'Đăng nhập thất bại.');

@@ -10,6 +10,7 @@ import Categories from './pages/Categories';
 import Reviews from './pages/Reviews';
 import Brands from './pages/Brands';
 import Voucher from './pages/Voucher';
+import News from './pages/News';
 
 const AppRoutes: React.FC = () => {
   return (
@@ -24,6 +25,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/reviews" element={<Reviews />} />
         <Route path="/brands" element={<Brands />} />
         <Route path="/vouchers" element={<Voucher />} />
+        <Route path="/news" element={<News />} />
         <Route path="/" element={<Dashboard />} />
       </Route>
       <Route path="/login" element={<Login />} />

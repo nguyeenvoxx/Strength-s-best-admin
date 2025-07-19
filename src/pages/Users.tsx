@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUsers, updateUser, deleteUser } from '../services/api';
+import type { UseQueryResult } from '@tanstack/react-query';
 
 interface User {
   _id: string;
@@ -15,11 +16,21 @@ interface User {
 const Users: React.FC = () => {
   const queryClient = useQueryClient();
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const { data: users = [], isLoading, error } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: getUsers,
+  const { data, isLoading, error }: UseQueryResult<any, Error> = useQuery({
+    queryKey: ['users', page],
+    queryFn: () => getUsers(page, 10),
   });
+  const users: User[] = data?.data?.users || data?.users || [];
+  useEffect(() => {
+    if (data?.data?.results) {
+      setTotalPages(Math.ceil(data.data.results / 10));
+    } else if (data?.results) {
+      setTotalPages(Math.ceil(data.results / 10));
+    }
+  }, [data]);
 
   const updateUserMutation = useMutation({
     mutationFn: ({ id, data }: { id: string, data: Partial<User> }) => updateUser(id, data),
@@ -91,7 +102,7 @@ const Users: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {users.map((user: User) => (
                 <tr key={user._id}>
                   {editingUser?._id === user._id ? (
                     <>
@@ -134,6 +145,14 @@ const Users: React.FC = () => {
               ))}
             </tbody>
           </table>
+          {/* Pagination */}
+          <div className="flex justify-center mt-4 gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&laquo;</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)} className={`px-3 py-1 rounded border ${p === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>{p}</button>
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&raquo;</button>
+          </div>
         </div>
       </div>
     </div>
