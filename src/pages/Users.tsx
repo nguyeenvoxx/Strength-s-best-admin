@@ -11,6 +11,7 @@ interface User {
   address?: string;
   role: 'user' | 'admin';
   status: 'active' | 'inactive';
+  avatarUrl?: string; // Thêm dòng này
 }
 
 const Users: React.FC = () => {
@@ -18,6 +19,8 @@ const Users: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const { data, isLoading, error }: UseQueryResult<any, Error> = useQuery({
     queryKey: ['users', page],
@@ -33,10 +36,12 @@ const Users: React.FC = () => {
   }, [data]);
 
   const updateUserMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string, data: Partial<User> }) => updateUser(id, data),
+    mutationFn: ({ id, data }: { id: string, data: any }) => updateUser(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setEditingUser(null);
+      setAvatarFile(null);
+      setAvatarPreview(null);
     },
     onError: (err: any) => {
       alert('Lỗi khi cập nhật người dùng: ' + (err?.response?.data?.message || err.message));
@@ -55,6 +60,8 @@ const Users: React.FC = () => {
 
   const handleEdit = (user: User) => {
     setEditingUser({ ...user });
+    setAvatarPreview(null); // reset preview khi sửa user mới
+    setAvatarFile(null);
   };
 
   const handleCancel = () => {
@@ -63,8 +70,17 @@ const Users: React.FC = () => {
 
   const handleSave = () => {
     if (editingUser) {
-      const { _id, ...dataToUpdate } = editingUser;
-      updateUserMutation.mutate({ id: _id, data: dataToUpdate });
+      const formData = new FormData();
+      formData.append('name', editingUser.name);
+      formData.append('email', editingUser.email);
+      if (editingUser.phoneNumber !== undefined) formData.append('phoneNumber', editingUser.phoneNumber);
+      if (editingUser.address !== undefined) formData.append('address', editingUser.address);
+      formData.append('role', editingUser.role);
+      formData.append('status', editingUser.status);
+      if (avatarFile) {
+        formData.append('avatar', avatarFile);
+      }
+      updateUserMutation.mutate({ id: editingUser._id, data: formData });
     }
   };
 
@@ -80,6 +96,14 @@ const Users: React.FC = () => {
     }
   };
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Quản lý Người dùng</h1>
@@ -92,6 +116,7 @@ const Users: React.FC = () => {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
+                <th className="border p-2 text-left">Ảnh</th>
                 <th className="border p-2 text-left">Tên</th>
                 <th className="border p-2 text-left">Email</th>
                 <th className="border p-2 text-left">Số điện thoại</th>
@@ -104,7 +129,23 @@ const Users: React.FC = () => {
             <tbody>
               {users.map((user: User) => (
                 <tr key={user._id}>
-                  {editingUser?._id === user._id ? (
+                  {/* Cột avatar */}
+                  <td className="border p-2 text-center">
+                    <img
+                      src={
+                        user.avatarUrl
+                          ? user.avatarUrl.startsWith('http')
+                            ? user.avatarUrl
+                            : user.avatarUrl.startsWith('/uploads/')
+                              ? `http://localhost:3000${user.avatarUrl}`
+                              : `http://localhost:3000/uploads/avatars/${user.avatarUrl}`
+                          : '/assets/default-avatar.png'
+                      }
+                      alt={user.name}
+                      style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  </td>
+                  {editingUser && editingUser._id === user._id ? (
                     <>
                       <td className="border p-2"><input name="name" value={editingUser.name} onChange={handleInputChange} className="p-1 border rounded w-full" /></td>
                       <td className="border p-2"><input name="email" value={editingUser.email} onChange={handleInputChange} className="p-1 border rounded w-full" /></td>
@@ -123,6 +164,22 @@ const Users: React.FC = () => {
                         </select>
                       </td>
                       <td className="border p-2">
+                        <input type="file" accept="image/*" onChange={handleAvatarChange} />
+                        {avatarPreview && <img src={avatarPreview} alt="avatar" style={{ width: 80, borderRadius: '50%' }} />}
+                        {/* Hiển thị ảnh cũ nếu chưa chọn ảnh mới */}
+                        {!avatarPreview && editingUser.avatarUrl && (
+                          <img
+                            src={
+                              editingUser.avatarUrl.startsWith('http')
+                                ? editingUser.avatarUrl
+                                : editingUser.avatarUrl.startsWith('/uploads/')
+                                  ? `http://localhost:3000${editingUser.avatarUrl}`
+                                  : `http://localhost:3000/uploads/avatars/${editingUser.avatarUrl}`
+                            }
+                            alt="avatar"
+                            style={{ width: 80, borderRadius: '50%' }}
+                          />
+                        )}
                         <button onClick={handleSave} className="bg-green-500 text-white px-2 py-1 rounded mr-2">Lưu</button>
                         <button onClick={handleCancel} className="bg-gray-500 text-white px-2 py-1 rounded">Hủy</button>
                       </td>

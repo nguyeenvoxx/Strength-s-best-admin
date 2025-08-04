@@ -35,7 +35,8 @@ const AddNewProduct: React.FC = () => {
 
   const mutation = useMutation({
     mutationFn: (data: FormData) => createProduct(data),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('✅ Product created successfully:', data);
       setSuccess('Thêm sản phẩm thành công!');
       setProduct({
         nameProduct: '',
@@ -52,7 +53,27 @@ const AddNewProduct: React.FC = () => {
       setImagePreview(null);
     },
     onError: (err: any) => {
-      setError('Lỗi khi thêm sản phẩm: ' + (err?.response?.data?.message || 'Không xác định'));
+      console.error('❌ Product creation error:', err);
+      console.error('❌ Error response:', err?.response?.data);
+      console.error('❌ Error status:', err?.response?.status);
+      console.error('❌ Error headers:', err?.response?.headers);
+      console.error('❌ Error config:', err?.config);
+      
+      let errorMessage = 'Lỗi khi thêm sản phẩm';
+      
+      if (err?.response?.status === 400) {
+        errorMessage = err?.response?.data?.message || 'Dữ liệu không hợp lệ';
+      } else if (err?.response?.status === 401) {
+        errorMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+      } else if (err?.response?.status === 403) {
+        errorMessage = 'Bạn không có quyền thực hiện hành động này.';
+      } else if (err?.response?.status >= 500) {
+        errorMessage = 'Lỗi server. Vui lòng thử lại sau.';
+      } else {
+        errorMessage = err?.response?.data?.message || err?.message || 'Lỗi không xác định';
+      }
+      
+      setError(errorMessage);
       setSuccess(null);
     }
   });
@@ -82,13 +103,39 @@ const AddNewProduct: React.FC = () => {
       setSuccess(null);
       return;
     }
+    
     const formData = new FormData();
-    Object.entries(product).forEach(([key, value]) => {
-      formData.append(key, value as any);
-    });
+    
+    // Thêm các trường dữ liệu
+    formData.append('nameProduct', product.nameProduct);
+    formData.append('priceProduct', product.priceProduct.toString());
+    formData.append('quantity', product.quantity.toString());
+    formData.append('idBrand', product.idBrand);
+    formData.append('idCategory', product.idCategory);
+    formData.append('status', product.status);
+    formData.append('description', product.description);
+    
+    // Thêm file ảnh nếu có
     if (imageFile) {
       formData.append('image', imageFile);
     }
+    
+    console.log('🔍 Submitting FormData:', {
+      nameProduct: product.nameProduct,
+      priceProduct: product.priceProduct,
+      quantity: product.quantity,
+      idBrand: product.idBrand,
+      idCategory: product.idCategory,
+      status: product.status,
+      description: product.description,
+      hasImage: !!imageFile
+    });
+    
+    // Debug: Log token
+    const token = localStorage.getItem('token');
+    console.log('🔍 Token exists:', !!token);
+    console.log('🔍 Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
+    
     mutation.mutate(formData);
   };
 

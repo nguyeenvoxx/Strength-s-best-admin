@@ -52,3 +52,76 @@ export default tseslint.config({
   },
 })
 ```
+
+Bạn đã cập nhật ảnh trong thư mục `uploads/products/` nhưng ảnh sản phẩm vẫn không hiển thị trên frontend. Dưới đây là các nguyên nhân thường gặp và cách kiểm tra, khắc phục:
+
+---
+
+## 1. **Kiểm tra trường `image` trong dữ liệu sản phẩm**
+
+- Ảnh chỉ hiển thị nếu trường `image` trong document sản phẩm (trong MongoDB) đúng với tên file ảnh trong thư mục `uploads/products/`.
+- Nếu bạn chỉ copy ảnh vào thư mục mà không cập nhật trường `image` trong database, frontend sẽ không biết để hiển thị.
+
+**Cách kiểm tra:**
+- Vào MongoDB, kiểm tra document sản phẩm, trường `image` phải đúng tên file, ví dụ:  
+  ```json
+  {
+    "nameProduct": "Sản phẩm A",
+    "image": "ten-anh.jpg"
+  }
+  ```
+- Nếu trường `image` là rỗng, sai tên, hoặc là đường dẫn cũ, ảnh sẽ không hiển thị.
+
+---
+
+## 2. **Kiểm tra đường dẫn ảnh trên frontend**
+
+- Ở file `AllProducts.tsx`, đường dẫn ảnh được render như sau:
+  ```js
+  src={product.image ? `${API_URL}/uploads/products/${product.image}` : defaultImg}
+  ```
+- Nếu trường `image` đúng tên file, và file tồn tại trong `uploads/products/`, ảnh sẽ hiển thị.
+
+---
+
+## 3. **Kiểm tra API backend có trả về đúng trường `image`**
+
+- Khi gọi API `/products`, mỗi sản phẩm phải có trường `image` đúng tên file ảnh.
+
+---
+
+## 4. **Kiểm tra server backend có serve static folder đúng không**
+
+- Trong file backend (thường là `index.js` hoặc `app.js`), phải có dòng:
+  ```js
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  ```
+- Nếu không có, ảnh sẽ không truy cập được qua URL.
+
+---
+
+## 5. **Kiểm tra lỗi 404 ảnh trên trình duyệt**
+
+- Mở tab Network, tìm request ảnh, nếu báo 404 thì:
+  - Tên file ảnh trong DB không đúng với file thực tế.
+  - File ảnh chưa được copy đúng vào thư mục.
+  - Backend chưa serve static đúng.
+
+---
+
+## 6. **Kiểm tra seedData.js**
+
+- Nếu bạn seed lại data, hãy đảm bảo trường `image` trong seed data đúng tên file ảnh mới.
+
+---
+
+## **Tóm lại:**
+
+- Trường `image` trong DB phải đúng tên file ảnh.
+- Ảnh phải nằm đúng trong `uploads/products/`.
+- Backend phải serve static folder `/uploads`.
+- Nếu seed lại data, phải cập nhật trường `image` trong file seed cho đúng.
+
+---
+
+**Bạn hãy kiểm tra lại các điểm trên. Nếu vẫn không được, hãy gửi ví dụ 1 document sản phẩm trong DB (hoặc file seed), tên file ảnh thực tế, và đường dẫn ảnh trên trình duyệt để mình hỗ trợ chi tiết!**

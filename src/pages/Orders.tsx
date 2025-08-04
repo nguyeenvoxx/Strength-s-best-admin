@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOrders, deleteOrder, getOrderDetail } from '../services/api'; // Giả sử có hàm deleteOrder
+import { getOrders, getOrderDetail, updateOrderStatus } from '../services/api'; // Giả sử có hàm deleteOrder
 import { Link } from 'react-router-dom';
 
 interface Order {
@@ -51,21 +51,10 @@ const Orders: React.FC = () => {
     }
   }, [data]);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteOrder(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-    },
-    onError: (err: any) => {
-      alert('Lỗi khi xóa đơn hàng: ' + (err?.response?.data?.message || err.message));
-    }
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string, status: string }) => updateOrderStatus(id, status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
   });
-
-  const handleDelete = (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa đơn hàng này?')) {
-      deleteMutation.mutate(id);
-    }
-  };
 
   const handleShowDetail = async (id: string) => {
     setSelectedOrderId(id);
@@ -85,6 +74,14 @@ const Orders: React.FC = () => {
     setOrderDetail(null);
     setErrorDetail(null);
   };
+
+  const statusOptions = [
+    { value: 'pending', label: 'Chờ xử lý' },
+    { value: 'processing', label: 'Đang xử lý' },
+    { value: 'shipped', label: 'Đang giao' },
+    { value: 'delivered', label: 'Đã giao' },
+    { value: 'cancelled', label: 'Đã hủy' },
+  ];
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
@@ -116,7 +113,18 @@ const Orders: React.FC = () => {
                   <td className="py-2 px-4 border-b">{order.idUser?.name || 'Không có'}</td>
                   <td className="py-2 px-4 border-b">{order.idUser?.email || 'Không có'}</td>
                   <td className="py-2 px-4 border-b">{order.totalPrice.toLocaleString('vi-VN')} ₫</td>
-                  <td className="py-2 px-4 border-b">{order.status === 'pending' ? 'Chờ xử lý' : order.status === 'processing' ? 'Đang xử lý' : order.status === 'completed' ? 'Hoàn thành' : order.status === 'returned' ? 'Đã hoàn trả' : order.status}</td>
+                  <td className="py-2 px-4 border-b">
+                    <select
+                      value={order.status}
+                      onChange={e => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
+                      className="p-1 border rounded"
+                      disabled={updateStatusMutation.isPending}
+                    >
+                      {statusOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="py-2 px-4 border-b">{
   (order.created_at && !isNaN(Date.parse(order.created_at)))
     ? new Date(order.created_at).toLocaleDateString('vi-VN')
@@ -129,11 +137,6 @@ const Orders: React.FC = () => {
                       onClick={() => handleShowDetail(order._id)}
                       className="text-blue-600 hover:underline mr-2"
                     >Xem chi tiết</button>
-                    <button
-                      onClick={() => handleDelete(order._id)}
-                      className="text-red-600 hover:underline"
-                      disabled={deleteMutation.isPending}
-                    >Xóa</button>
                   </td>
                 </tr>
               ))}
