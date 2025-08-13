@@ -435,6 +435,16 @@ export const deleteReview = async (id: string) => {
   return response.data;
 };
 
+export const hideReview = async (id: string) => {
+  const response = await api.patch(`/product-reviews/${id}/hide`);
+  return response.data;
+};
+
+export const unhideReview = async (id: string) => {
+  const response = await api.patch(`/product-reviews/${id}/unhide`);
+  return response.data;
+};
+
 export const addAdminReply = async (id: string, content: string) => {
   const response = await api.post(`/product-reviews/${id}/admin-replies`, { content });
   return response.data;

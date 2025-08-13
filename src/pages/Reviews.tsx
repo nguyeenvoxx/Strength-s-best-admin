@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getReviews, deleteReview, addAdminReply, editAdminReply, deleteAdminReply } from '../services/api';
+import { getReviews, deleteReview, hideReview, unhideReview, addAdminReply, editAdminReply, deleteAdminReply } from '../services/api';
 
 interface AdminReply {
   content: string;
@@ -19,6 +19,7 @@ interface Review {
   };
   rating: number;
   review: string;
+  status?: 'active' | 'hidden';
   adminReplies?: AdminReply[];
   created_at: string;
 }
@@ -52,6 +53,32 @@ const Reviews: React.FC = () => {
     },
     onError: (err: any) => {
       setErrorMsg('Lỗi khi xóa đánh giá: ' + (err?.response?.data?.message || err.message));
+      setSuccessMsg(null);
+    }
+  });
+
+  const hideMutation = useMutation({
+    mutationFn: (id: string) => hideReview(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      setSuccessMsg('Ẩn đánh giá thành công!');
+      setErrorMsg(null);
+    },
+    onError: (err: any) => {
+      setErrorMsg('Lỗi khi ẩn đánh giá: ' + (err?.response?.data?.message || err.message));
+      setSuccessMsg(null);
+    }
+  });
+
+  const unhideMutation = useMutation({
+    mutationFn: (id: string) => unhideReview(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      setSuccessMsg('Bỏ ẩn đánh giá thành công!');
+      setErrorMsg(null);
+    },
+    onError: (err: any) => {
+      setErrorMsg('Lỗi khi bỏ ẩn đánh giá: ' + (err?.response?.data?.message || err.message));
       setSuccessMsg(null);
     }
   });
@@ -113,6 +140,18 @@ const Reviews: React.FC = () => {
     }
   };
 
+  const handleHideReview = (id: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn ẩn đánh giá này?')) {
+      hideMutation.mutate(id);
+    }
+  };
+
+  const handleUnhideReview = (id: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn bỏ ẩn đánh giá này?')) {
+      unhideMutation.mutate(id);
+    }
+  };
+
   const handleAddReply = (id: string) => {
     if (!replyContent.trim()) {
       setErrorMsg('Nội dung phản hồi không được để trống!');
@@ -156,6 +195,7 @@ const Reviews: React.FC = () => {
                 <th className="border p-2 text-left">Đánh giá</th>
                 <th className="border p-2 text-left">Bình luận</th>
                 <th className="border p-2 text-left">Ngày tạo</th>
+                <th className="border p-2 text-left">Trạng thái</th>
                 <th className="border p-2 text-left">Phản hồi admin</th>
                 <th className="border p-2 text-left">Hành động</th>
               </tr>
@@ -176,6 +216,15 @@ const Reviews: React.FC = () => {
                   </td>
                   <td className="border p-2">
                     {new Date(review.created_at).toLocaleDateString('vi-VN')}
+                  </td>
+                  <td className="border p-2">
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      review.status === 'hidden' 
+                        ? 'bg-gray-100 text-gray-600' 
+                        : 'bg-green-100 text-green-600'
+                    }`}>
+                      {review.status === 'hidden' ? 'Đã ẩn' : 'Hiển thị'}
+                    </span>
                   </td>
                   <td className="border p-2">
                     <div className="flex flex-col gap-2">
@@ -285,13 +334,32 @@ const Reviews: React.FC = () => {
                     </div>
                   </td>
                   <td className="border p-2">
-                    <button
-                      onClick={() => handleDeleteReview(review._id)}
-                      className="bg-red-500 text-white px-2 py-1 rounded text-sm"
-                      disabled={deleteMutation.isPending}
-                    >
-                      Xóa
-                    </button>
+                    <div className="flex gap-2">
+                      {review.status === 'hidden' ? (
+                        <button
+                          onClick={() => handleUnhideReview(review._id)}
+                          className="bg-green-500 text-white px-2 py-1 rounded text-sm"
+                          disabled={unhideMutation.isPending}
+                        >
+                          Bỏ ẩn
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleHideReview(review._id)}
+                          className="bg-orange-500 text-white px-2 py-1 rounded text-sm"
+                          disabled={hideMutation.isPending}
+                        >
+                          Ẩn
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteReview(review._id)}
+                        className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                        disabled={deleteMutation.isPending}
+                      >
+                        Xóa
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -286,45 +286,15 @@ const Dashboard: React.FC = () => {
           <p className="text-2xl text-blue-600 mt-2">{formatVND(stats?.totalRevenue ?? 0)}</p>
         </div>
       </div>
-      {/* Biểu đồ doanh thu và đơn hàng mới nhất */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Biểu đồ doanh thu */}
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4">Biểu đồ doanh thu</h2>
-          <div className="h-64">
-            <canvas ref={canvasRef} id="revenueChart"></canvas>
-          </div>
-        </div>
-        {/* Đơn hàng mới nhất */}
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4">Đơn hàng mới nhất</h2>
-          <div className="space-y-3">
-            {stats?.latestOrders && stats.latestOrders.length > 0 ? (
-              stats.latestOrders.map((order) => (
-                <div key={order._id} className="border-b border-gray-200 pb-3 last:border-b-0">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{order.user.name}</p>
-                      <p className="text-sm text-gray-600">{order.user.email}</p>
-                      <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-green-600">{formatVND(order.totalPrice)}</p>
-                      <span className={`inline-block px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
-                        {getStatusText(order.status)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-center py-4">Chưa có đơn hàng nào</p>
-            )}
-          </div>
+      {/* Biểu đồ doanh thu - To hơn */}
+      <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Biểu đồ doanh thu</h2>
+        <div className="h-96">
+          <canvas ref={canvasRef} id="revenueChart"></canvas>
         </div>
       </div>
       {/* Sản phẩm bán chạy */}
-      <div className="bg-white p-6 rounded-lg shadow-lg">
+      <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Top sản phẩm bán chạy</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {stats?.topSellingProducts && stats.topSellingProducts.length > 0 ? (
@@ -355,6 +325,34 @@ const Dashboard: React.FC = () => {
             ))
           ) : (
             <p className="text-gray-500 text-center py-4 col-span-full">Chưa có dữ liệu sản phẩm bán chạy</p>
+          )}
+        </div>
+      </div>
+      
+      {/* Đơn hàng mới nhất - Di chuyển xuống dưới */}
+      <div className="bg-white p-6 rounded-lg shadow-lg">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">Đơn hàng mới nhất</h2>
+        <div className="space-y-3">
+          {stats?.latestOrders && stats.latestOrders.length > 0 ? (
+            stats.latestOrders.map((order) => (
+              <div key={order._id} className="border-b border-gray-200 pb-3 last:border-b-0">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{order.user.name}</p>
+                    <p className="text-sm text-gray-600">{order.user.email}</p>
+                    <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-green-600">{formatVND(order.totalPrice)}</p>
+                    <span className={`inline-block px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
+                      {getStatusText(order.status)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500 text-center py-4">Chưa có đơn hàng nào</p>
           )}
         </div>
       </div>
