@@ -430,10 +430,7 @@ export const createReview = async (data: { idProduct: string; idOrderDetail: str
   return response.data;
 };
 
-export const deleteReview = async (id: string) => {
-  const response = await api.delete(`/product-reviews/${id}`);
-  return response.data;
-};
+// ĐÃ BỎ tính năng xóa review của user theo yêu cầu
 
 export const hideReview = async (id: string) => {
   const response = await api.patch(`/product-reviews/${id}/hide`);

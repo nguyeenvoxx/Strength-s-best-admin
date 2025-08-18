@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getReviews, deleteReview, hideReview, unhideReview, addAdminReply, editAdminReply, deleteAdminReply } from '../services/api';
+import { getReviews, hideReview, unhideReview, addAdminReply, editAdminReply, deleteAdminReply } from '../services/api';
 
 interface AdminReply {
   content: string;
@@ -44,18 +44,7 @@ const Reviews: React.FC = () => {
     }
   }, [data]);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteReview(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
-      setSuccessMsg('Xóa đánh giá thành công!');
-      setErrorMsg(null);
-    },
-    onError: (err: any) => {
-      setErrorMsg('Lỗi khi xóa đánh giá: ' + (err?.response?.data?.message || err.message));
-      setSuccessMsg(null);
-    }
-  });
+  // ĐÃ BỎ tính năng xóa đánh giá của người dùng theo yêu cầu
 
   const hideMutation = useMutation({
     mutationFn: (id: string) => hideReview(id),
@@ -134,11 +123,7 @@ const Reviews: React.FC = () => {
     }
   });
 
-  const handleDeleteReview = (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa đánh giá này?')) {
-      deleteMutation.mutate(id);
-    }
-  };
+  // ĐÃ BỎ: handleDeleteReview (không cho xóa đánh giá)
 
   const handleHideReview = (id: string) => {
     if (window.confirm('Bạn có chắc chắn muốn ẩn đánh giá này?')) {
@@ -352,13 +337,7 @@ const Reviews: React.FC = () => {
                           Ẩn
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDeleteReview(review._id)}
-                        className="bg-red-500 text-white px-2 py-1 rounded text-sm"
-                        disabled={deleteMutation.isPending}
-                      >
-                        Xóa
-                      </button>
+                      {/* Bỏ nút Xóa đánh giá của user */}
                     </div>
                   </td>
                 </tr>
@@ -378,15 +357,72 @@ const Reviews: React.FC = () => {
           >
             &laquo;
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button 
-              key={p} 
-              onClick={() => setPage(p)} 
-              className={`px-3 py-1 rounded border ${p === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
-            >
-              {p}
-            </button>
-          ))}
+          
+          {/* Logic phân trang gọn */}
+          {(() => {
+            const pages = [];
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage + 1 < maxVisiblePages) {
+              startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // Thêm trang đầu nếu cần
+            if (startPage > 1) {
+              pages.push(
+                <button 
+                  key={1} 
+                  onClick={() => setPage(1)} 
+                  className="px-3 py-1 rounded border bg-gray-100"
+                >
+                  1
+                </button>
+              );
+              
+              if (startPage > 2) {
+                pages.push(
+                  <span key="dots1" className="px-2 py-1">...</span>
+                );
+              }
+            }
+
+            // Thêm các trang hiển thị
+            for (let i = startPage; i <= endPage; i++) {
+              pages.push(
+                <button 
+                  key={i} 
+                  onClick={() => setPage(i)} 
+                  className={`px-3 py-1 rounded border ${i === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                >
+                  {i}
+                </button>
+              );
+            }
+
+            // Thêm trang cuối nếu cần
+            if (endPage < totalPages) {
+              if (endPage < totalPages - 1) {
+                pages.push(
+                  <span key="dots2" className="px-2 py-1">...</span>
+                );
+              }
+              
+              pages.push(
+                <button 
+                  key={totalPages} 
+                  onClick={() => setPage(totalPages)} 
+                  className="px-3 py-1 rounded border bg-gray-100"
+                >
+                  {totalPages}
+                </button>
+              );
+            }
+
+            return pages;
+          })()}
+          
           <button 
             onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
             disabled={page === totalPages} 

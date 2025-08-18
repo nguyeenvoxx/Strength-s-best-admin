@@ -304,9 +304,54 @@ const VoucherPage: React.FC = () => {
       {/* Pagination */}
       <div className="flex justify-center mt-4 gap-2">
         <Button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>&laquo;</Button>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-          <Button key={p} onClick={() => setPage(p)} type={p === page ? 'primary' : 'default'}>{p}</Button>
-        ))}
+        
+        {/* Logic phân trang gọn */}
+        {(() => {
+          const pages = [];
+          const maxVisiblePages = 5;
+          let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+          let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+          
+          if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+          }
+
+          // Thêm trang đầu nếu cần
+          if (startPage > 1) {
+            pages.push(
+              <Button key={1} onClick={() => setPage(1)} type="default">1</Button>
+            );
+            
+            if (startPage > 2) {
+              pages.push(
+                <span key="dots1" className="px-2 py-1">...</span>
+              );
+            }
+          }
+
+          // Thêm các trang hiển thị
+          for (let i = startPage; i <= endPage; i++) {
+            pages.push(
+              <Button key={i} onClick={() => setPage(i)} type={i === page ? 'primary' : 'default'}>{i}</Button>
+            );
+          }
+
+          // Thêm trang cuối nếu cần
+          if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+              pages.push(
+                <span key="dots2" className="px-2 py-1">...</span>
+              );
+            }
+            
+            pages.push(
+              <Button key={totalPages} onClick={() => setPage(totalPages)} type="default">{totalPages}</Button>
+            );
+          }
+
+          return pages;
+        })()}
+        
         <Button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>&raquo;</Button>
       </div>
     </div>

@@ -54,6 +54,10 @@ const Orders: React.FC = () => {
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string, status: string }) => updateOrderStatus(id, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.message || 'Không thể cập nhật trạng thái đơn hàng';
+      alert(errorMessage);
+    },
   });
 
   const handleShowDetail = async (id: string) => {
@@ -117,13 +121,18 @@ const Orders: React.FC = () => {
                     <select
                       value={order.status}
                       onChange={e => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
-                      className="p-1 border rounded"
-                      disabled={updateStatusMutation.isPending}
+                      className={`p-1 border rounded ${(order.status === 'delivered' || order.status === 'cancelled') ? 'bg-gray-100 text-gray-500' : ''}`}
+                      disabled={updateStatusMutation.isPending || order.status === 'delivered' || order.status === 'cancelled'}
                     >
                       {statusOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
+                    {(order.status === 'delivered' || order.status === 'cancelled') && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {order.status === 'delivered' ? 'Không thể thay đổi trạng thái đơn hàng đã giao' : 'Không thể thay đổi trạng thái đơn hàng đã hủy'}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2 px-4 border-b">{
   (order.created_at && !isNaN(Date.parse(order.created_at)))
@@ -146,9 +155,72 @@ const Orders: React.FC = () => {
         {/* Pagination */}
         <div className="flex justify-center mt-4 gap-2">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&laquo;</button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button key={p} onClick={() => setPage(p)} className={`px-3 py-1 rounded border ${p === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>{p}</button>
-          ))}
+          
+          {/* Logic phân trang gọn */}
+          {(() => {
+            const pages = [];
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage + 1 < maxVisiblePages) {
+              startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // Thêm trang đầu nếu cần
+            if (startPage > 1) {
+              pages.push(
+                <button 
+                  key={1} 
+                  onClick={() => setPage(1)} 
+                  className="px-3 py-1 rounded border bg-gray-100"
+                >
+                  1
+                </button>
+              );
+              
+              if (startPage > 2) {
+                pages.push(
+                  <span key="dots1" className="px-2 py-1">...</span>
+                );
+              }
+            }
+
+            // Thêm các trang hiển thị
+            for (let i = startPage; i <= endPage; i++) {
+              pages.push(
+                <button 
+                  key={i} 
+                  onClick={() => setPage(i)} 
+                  className={`px-3 py-1 rounded border ${i === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                >
+                  {i}
+                </button>
+              );
+            }
+
+            // Thêm trang cuối nếu cần
+            if (endPage < totalPages) {
+              if (endPage < totalPages - 1) {
+                pages.push(
+                  <span key="dots2" className="px-2 py-1">...</span>
+                );
+              }
+              
+              pages.push(
+                <button 
+                  key={totalPages} 
+                  onClick={() => setPage(totalPages)} 
+                  className="px-3 py-1 rounded border bg-gray-100"
+                >
+                  {totalPages}
+                </button>
+              );
+            }
+
+            return pages;
+          })()}
+          
           <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&raquo;</button>
         </div>
       </div>
@@ -162,9 +234,23 @@ const Orders: React.FC = () => {
                 <div className="mb-2"><b>Mã đơn hàng:</b> {orderDetail.order._id}</div>
                 <div className="mb-2"><b>Khách hàng:</b> {orderDetail.order.idUser?.name} ({orderDetail.order.idUser?.email})</div>
                 <div className="mb-2"><b>Ngày mua:</b> {new Date(orderDetail.order.created_at || orderDetail.order.createdAt).toLocaleString('vi-VN')}</div>
-                <div className="mb-2"><b>Trạng thái:</b> {orderDetail.order.status === 'pending' ? 'Chờ xử lý' : orderDetail.order.status === 'processing' ? 'Đang xử lý' : orderDetail.order.status === 'completed' ? 'Hoàn thành' : orderDetail.order.status === 'returned' ? 'Đã hoàn trả' : orderDetail.order.status}</div>
+                <div className="mb-2"><b>Trạng thái:</b> {orderDetail.order.status === 'pending' ? 'Chờ xử lý' : orderDetail.order.status === 'processing' ? 'Đang xử lý' : orderDetail.order.status === 'shipped' ? 'Đang giao' : orderDetail.order.status === 'delivered' ? 'Đã giao' : orderDetail.order.status === 'cancelled' ? 'Đã hủy' : orderDetail.order.status}</div>
                 <div className="mb-2"><b>Tổng tiền:</b> {orderDetail.order.totalPrice.toLocaleString('vi-VN')} ₫</div>
                 <div className="mb-2"><b>Thanh toán:</b> {orderDetail.payment ? `${orderDetail.payment.amount.toLocaleString('vi-VN')} ₫ - ${orderDetail.payment.method === 'credit_card' ? 'Thẻ tín dụng' : orderDetail.payment.method === 'cash_on_delivery' ? 'Thanh toán khi nhận hàng' : orderDetail.payment.method === 'bank_transfer' ? 'Chuyển khoản' : orderDetail.payment.method === 'paypal' ? 'PayPal' : orderDetail.payment.method} - ${orderDetail.payment.status === 'pending' ? 'Chờ xử lý' : orderDetail.payment.status === 'completed' ? 'Đã thanh toán' : 'Thất bại'}` : 'Chưa thanh toán'}</div>
+                <div className="mb-2">
+                  <b>Địa chỉ giao hàng:</b> {orderDetail.order.shippingAddress ? (
+                    <span className="ml-2">{orderDetail.order.shippingAddress.address || 'Không có'}</span>
+                  ) : (
+                    <span className="text-gray-500 ml-2">Không có thông tin địa chỉ</span>
+                  )}
+                </div>
+                <div className="mb-2">
+                  <b>Số điện thoại:</b> {orderDetail.order.shippingAddress ? (
+                    <span className="ml-2">{orderDetail.order.shippingAddress.phone || 'Không có'}</span>
+                  ) : (
+                    <span className="text-gray-500 ml-2">Không có thông tin</span>
+                  )}
+                </div>
                 <div className="mb-2"><b>Sản phẩm đã mua:</b></div>
                 <table className="w-full border mb-2">
                   <thead>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUsers, updateUser, deleteUser } from '../services/api';
+import { getUsers, updateUser } from '../services/api';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 interface User {
@@ -48,15 +48,7 @@ const Users: React.FC = () => {
     }
   });
 
-  const deleteUserMutation = useMutation({
-    mutationFn: (id: string) => deleteUser(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-    onError: (err: any) => {
-      alert('Lỗi khi xóa người dùng: ' + (err?.response?.data?.message || err.message));
-    }
-  });
+
 
   const handleEdit = (user: User) => {
     setEditingUser({ ...user });
@@ -84,11 +76,7 @@ const Users: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa người dùng này không?')) {
-      deleteUserMutation.mutate(id);
-    }
-  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (editingUser) {
@@ -193,8 +181,7 @@ const Users: React.FC = () => {
                       <td className="border p-2">{user.role}</td>
                       <td className="border p-2">{user.status}</td>
                       <td className="border p-2">
-                        <button onClick={() => handleEdit(user)} className="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Sửa</button>
-                        <button onClick={() => handleDelete(user._id)} className="bg-red-500 text-white px-2 py-1 rounded">Xóa</button>
+                        <button onClick={() => handleEdit(user)} className="bg-yellow-500 text-white px-2 py-1 rounded">Sửa</button>
                       </td>
                     </>
                   )}
@@ -205,9 +192,72 @@ const Users: React.FC = () => {
           {/* Pagination */}
           <div className="flex justify-center mt-4 gap-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&laquo;</button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-              <button key={p} onClick={() => setPage(p)} className={`px-3 py-1 rounded border ${p === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>{p}</button>
-            ))}
+            
+            {/* Logic phân trang gọn */}
+            {(() => {
+              const pages = [];
+              const maxVisiblePages = 5;
+              let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+              let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+              
+              if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+              }
+
+              // Thêm trang đầu nếu cần
+              if (startPage > 1) {
+                pages.push(
+                  <button 
+                    key={1} 
+                    onClick={() => setPage(1)} 
+                    className="px-3 py-1 rounded border bg-gray-100"
+                  >
+                    1
+                  </button>
+                );
+                
+                if (startPage > 2) {
+                  pages.push(
+                    <span key="dots1" className="px-2 py-1">...</span>
+                  );
+                }
+              }
+
+              // Thêm các trang hiển thị
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button 
+                    key={i} 
+                    onClick={() => setPage(i)} 
+                    className={`px-3 py-1 rounded border ${i === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+
+              // Thêm trang cuối nếu cần
+              if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                  pages.push(
+                    <span key="dots2" className="px-2 py-1">...</span>
+                  );
+                }
+                
+                pages.push(
+                  <button 
+                    key={totalPages} 
+                    onClick={() => setPage(totalPages)} 
+                    className="px-3 py-1 rounded border bg-gray-100"
+                  >
+                    {totalPages}
+                  </button>
+                );
+              }
+
+              return pages;
+            })()}
+            
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&raquo;</button>
           </div>
         </div>

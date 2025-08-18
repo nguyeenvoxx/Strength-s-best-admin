@@ -11,8 +11,8 @@ interface Product {
   quantity: number;
   image: string;
   status: string;
-  idBrand?: string;
-  idCategory?: string;
+  idBrand?: any; // có thể là string hoặc object được populate
+  idCategory?: any; // có thể là string hoặc object được populate
   description?: string;
   detail?: string; // Thêm trường detail
 }
@@ -89,8 +89,20 @@ const AllProducts: React.FC = () => {
     },
   });
   const [showEditForm, setShowEditForm] = React.useState(false);
-  const handleEdit = (product: ProductEdit) => {
-    setEditingProduct({ ...product }); // Luôn clone để form luôn nhận giá trị mới
+  const handleEdit = (product: any) => {
+    // Chuẩn hóa idBrand/idCategory về dạng string _id nếu backend đã populate
+    const normalized: ProductEdit = {
+      _id: product._id,
+      nameProduct: product.nameProduct,
+      priceProduct: product.priceProduct,
+      quantity: product.quantity,
+      image: product.image,
+      status: product.status,
+      idBrand: typeof product.idBrand === 'object' ? (product.idBrand?._id || '') : (product.idBrand || ''),
+      idCategory: typeof product.idCategory === 'object' ? (product.idCategory?._id || '') : (product.idCategory || ''),
+      description: product.description || '',
+    };
+    setEditingProduct(normalized);
     setImagePreview(product.image ? `${API_URL}/uploads/products/${product.image}` : null);
     setShowEditForm(true);
   };
@@ -108,8 +120,8 @@ const AllProducts: React.FC = () => {
   };
   const validateEditInput = (prod: ProductEdit): string | null => {
     if (!prod.nameProduct.trim()) return 'Tên sản phẩm không được để trống';
-    if (prod.priceProduct <= 0) return 'Giá sản phẩm phải lớn hơn 0';
-    if (prod.quantity < 1) return 'Số lượng sản phẩm phải lớn hơn 0';
+    if (!Number.isFinite(prod.priceProduct) || prod.priceProduct <= 0) return 'Giá sản phẩm phải lớn hơn 0';
+    if (!Number.isFinite(prod.quantity) || prod.quantity < 1) return 'Số lượng sản phẩm phải lớn hơn 0';
     if (!prod.idBrand) return 'Vui lòng chọn thương hiệu';
     if (!prod.idCategory) return 'Vui lòng chọn danh mục';
     return null;
@@ -193,6 +205,28 @@ const AllProducts: React.FC = () => {
 
   const defaultImg = '/assets/default-product.png';
 
+  // Helpers: lấy tên thương hiệu/danh mục dù dữ liệu là id hay object
+  const getBrandName = (p: any): string => {
+    if (!p) return '-';
+    const brand = p.idBrand;
+    if (!brand) return '-';
+    if (typeof brand === 'object') {
+      return brand.name || brand.nameBrand || brand.brandName || brand.title || '-';
+    }
+    const found = (brands as any[]).find((b: any) => b._id === brand);
+    return found?.name || '-';
+  };
+  const getCategoryName = (p: any): string => {
+    if (!p) return '-';
+    const cate = p.idCategory;
+    if (!cate) return '-';
+    if (typeof cate === 'object') {
+      return cate.nameCategory || cate.name || cate.title || '-';
+    }
+    const found = (categories as any[]).find((c: any) => c._id === cate);
+    return found?.nameCategory || found?.name || '-';
+  };
+
   const [showAddForm, setShowAddForm] = React.useState(false);
   const [newProduct, setNewProduct] = React.useState<ProductEdit>({
     nameProduct: '',
@@ -235,8 +269,8 @@ const AllProducts: React.FC = () => {
   };
   const validateAddInput = (prod: ProductEdit): string | null => {
     if (!prod.nameProduct.trim()) return 'Tên sản phẩm không được để trống';
-    if (prod.priceProduct <= 0) return 'Giá sản phẩm phải lớn hơn 0';
-    if (prod.quantity < 1) return 'Số lượng sản phẩm phải lớn hơn 0';
+    if (!Number.isFinite(prod.priceProduct) || prod.priceProduct <= 0) return 'Giá sản phẩm phải lớn hơn 0';
+    if (!Number.isFinite(prod.quantity) || prod.quantity < 1) return 'Số lượng sản phẩm phải lớn hơn 0';
     if (!prod.idBrand) return 'Vui lòng chọn thương hiệu';
     if (!prod.idCategory) return 'Vui lòng chọn danh mục';
     return null;
@@ -404,11 +438,11 @@ const AllProducts: React.FC = () => {
               </div>
               <div>
                 <label className="block text-gray-700">Giá</label>
-                <input name="priceProduct" type="number" value={editingProduct.priceProduct} onChange={handleInputChange} className="w-full p-2 border rounded" />
+                <input name="priceProduct" type="number" min={1} value={editingProduct.priceProduct} onChange={handleInputChange} className="w-full p-2 border rounded" />
               </div>
               <div>
                 <label className="block text-gray-700">Số lượng</label>
-                <input name="quantity" type="number" value={editingProduct.quantity} onChange={handleInputChange} className="w-full p-2 border rounded" />
+                <input name="quantity" type="number" min={1} value={editingProduct.quantity} onChange={handleInputChange} className="w-full p-2 border rounded" />
               </div>
               <div>
                 <label className="block text-gray-700">Trạng thái</label>
@@ -471,11 +505,11 @@ const AllProducts: React.FC = () => {
             </div>
             <div>
               <label className="block text-gray-700">Giá</label>
-              <input name="priceProduct" type="number" value={newProduct.priceProduct} onChange={e => setNewProduct({ ...newProduct, priceProduct: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" />
+              <input name="priceProduct" type="number" min={1} value={newProduct.priceProduct} onChange={e => setNewProduct({ ...newProduct, priceProduct: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" />
             </div>
             <div>
               <label className="block text-gray-700">Số lượng</label>
-              <input name="quantity" type="number" value={newProduct.quantity} onChange={e => setNewProduct({ ...newProduct, quantity: parseInt(e.target.value) || 0 })} className="w-full p-2 border rounded" />
+              <input name="quantity" type="number" min={1} value={newProduct.quantity} onChange={e => setNewProduct({ ...newProduct, quantity: parseInt(e.target.value) || 0 })} className="w-full p-2 border rounded" />
             </div>
             <div>
               <label className="block text-gray-700">Trạng thái</label>
@@ -548,8 +582,8 @@ const AllProducts: React.FC = () => {
                   <td className="py-2 px-4 border-b text-center">{product.priceProduct.toLocaleString('vi-VN')} VND</td>
                   <td className="py-2 px-4 border-b text-center">{product.quantity}</td>
                   <td className="py-2 px-4 border-b text-center">{product.status === 'active' ? 'Đang bán' : 'Vô hiệu hóa'}</td>
-                  <td className="py-2 px-4 border-b text-center">{brands.find((b: any) => b._id === product.idBrand)?.name || '-'}</td>
-                  <td className="py-2 px-4 border-b text-center">{categories.find((c: any) => c._id === product.idCategory)?.nameCategory || '-'}</td>
+                  <td className="py-2 px-4 border-b text-center">{getBrandName(product)}</td>
+                  <td className="py-2 px-4 border-b text-center">{getCategoryName(product)}</td>
                   <td className="py-2 px-4 border-b text-center max-w-xs truncate" title={product.description}>{product.description}</td>
                   <td className="py-2 px-4 border-b text-center">
                     <button
@@ -591,9 +625,72 @@ const AllProducts: React.FC = () => {
       {totalPages > 1 && (
         <div className="flex justify-center mt-4 gap-2">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&laquo;</button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button key={p} onClick={() => setPage(p)} className={`px-3 py-1 rounded border ${p === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>{p}</button>
-          ))}
+          
+          {/* Logic phân trang gọn */}
+          {(() => {
+            const pages = [];
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage + 1 < maxVisiblePages) {
+              startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // Thêm trang đầu nếu cần
+            if (startPage > 1) {
+              pages.push(
+                <button 
+                  key={1} 
+                  onClick={() => setPage(1)} 
+                  className="px-3 py-1 rounded border bg-gray-100"
+                >
+                  1
+                </button>
+              );
+              
+              if (startPage > 2) {
+                pages.push(
+                  <span key="dots1" className="px-2 py-1">...</span>
+                );
+              }
+            }
+
+            // Thêm các trang hiển thị
+            for (let i = startPage; i <= endPage; i++) {
+              pages.push(
+                <button 
+                  key={i} 
+                  onClick={() => setPage(i)} 
+                  className={`px-3 py-1 rounded border ${i === page ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                >
+                  {i}
+                </button>
+              );
+            }
+
+            // Thêm trang cuối nếu cần
+            if (endPage < totalPages) {
+              if (endPage < totalPages - 1) {
+                pages.push(
+                  <span key="dots2" className="px-2 py-1">...</span>
+                );
+              }
+              
+              pages.push(
+                <button 
+                  key={totalPages} 
+                  onClick={() => setPage(totalPages)} 
+                  className="px-3 py-1 rounded border bg-gray-100"
+                >
+                  {totalPages}
+                </button>
+              );
+            }
+
+            return pages;
+          })()}
+          
           <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">&raquo;</button>
         </div>
       )}
@@ -638,8 +735,8 @@ const AllProducts: React.FC = () => {
                     <div><span className="font-semibold">Giá:</span> {detailProduct.priceProduct.toLocaleString('vi-VN')} VND</div>
                     <div><span className="font-semibold">Số lượng:</span> {detailProduct.quantity}</div>
                     <div><span className="font-semibold">Trạng thái:</span> <span className={detailProduct.status === 'active' ? 'text-green-600' : 'text-red-600'}>{detailProduct.status === 'active' ? 'Đang bán' : 'Vô hiệu hóa'}</span></div>
-                    <div><span className="font-semibold">Thương hiệu:</span> {brands.find((b: any) => b._id === detailProduct.idBrand)?.name || '-'}</div>
-                    <div><span className="font-semibold">Danh mục:</span> {categories.find((c: any) => c._id === detailProduct.idCategory)?.nameCategory || '-'}</div>
+                    <div><span className="font-semibold">Thương hiệu:</span> {getBrandName(detailProduct)}</div>
+                    <div><span className="font-semibold">Danh mục:</span> {getCategoryName(detailProduct)}</div>
                     <div><span className="font-semibold">Mô tả ngắn:</span> {detailProduct.description || 'Không có mô tả'}</div>
                   </div>
                 </div>
