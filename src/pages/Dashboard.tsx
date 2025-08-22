@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Chart from 'chart.js/auto';
-import { getAdminDashboard } from '../services/api';
+import { getAdminDashboard, getPendingOrders, updateOrderStatus } from '../services/api';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface DashboardStats {
   totalUsers: number;
   totalOrders: number;
   totalRevenue: number;
   revenueByTime: { label: string; revenue: number }[];
-  latestOrders: Array<{
+  pendingOrders: Array<{
     _id: string;
     totalPrice: number;
     status: string;
@@ -18,6 +19,7 @@ interface DashboardStats {
       email: string;
     };
   }>;
+  totalPendingOrders: number;
   topSellingProducts: Array<{
     _id: string;
     productName: string;
@@ -56,17 +58,40 @@ const formatVND = (value: number) => {
 // Hàm sinh mốc thời gian đầy đủ
 function getFullTimeLabels(filterType: string, year: number, month: number) {
   if (filterType === 'day') {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentDay = now.getDate();
+    
     // Lấy số ngày trong tháng
     const daysInMonth = new Date(year, month, 0).getDate();
+    
+    // Nếu đang xem tháng hiện tại của năm hiện tại, chỉ hiển thị đến ngày hiện tại
+    if (year === currentYear && month === currentMonth) {
+      return Array.from({ length: currentDay }, (_, i) => `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`);
+    }
+    // Nếu xem tháng khác, hiển thị tất cả ngày trong tháng
     return Array.from({ length: daysInMonth }, (_, i) => `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`);
   }
   if (filterType === 'month') {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    
+    // Nếu đang xem năm hiện tại, chỉ hiển thị đến tháng hiện tại
+    if (year === currentYear) {
+      return Array.from({ length: currentMonth }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+    }
+    // Nếu xem năm khác, hiển thị tất cả 12 tháng
     return Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   }
   if (filterType === 'year') {
     const now = new Date();
     const currentYear = now.getFullYear();
-    return Array.from({ length: 11 }, (_, i) => String(currentYear - 5 + i));
+    // Chỉ hiển thị từ năm 2020 đến năm hiện tại
+    const startYear = Math.max(2020, currentYear - 5);
+    const yearsCount = currentYear - startYear + 1;
+    return Array.from({ length: yearsCount }, (_, i) => String(startYear + i));
   }
   return [];
 }
@@ -80,14 +105,87 @@ const Dashboard: React.FC = () => {
   const currentYear = now.getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
+  const [pendingOrdersPage, setPendingOrdersPage] = useState(1);
+  const [showAllPendingOrders, setShowAllPendingOrders] = useState(false);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'pending' | 'processing' | 'shipped' | 'all'>('all');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    orderId: string;
+    newStatus: string;
+    currentStatus: string;
+  }>({
+    isOpen: false,
+    orderId: '',
+    newStatus: '',
+    currentStatus: ''
+  });
 
-  const years = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
-  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  // Chỉ hiển thị từ năm 2020 đến năm hiện tại
+  const startYear = Math.max(2020, currentYear - 5);
+  const yearsCount = currentYear - startYear + 1;
+  const years = Array.from({ length: yearsCount }, (_, i) => startYear + i);
+  // Nếu đang ở năm hiện tại, chỉ hiển thị đến tháng hiện tại
+  const currentMonth = now.getMonth() + 1;
+  const months = selectedYear === currentYear 
+    ? Array.from({ length: currentMonth }, (_, i) => i + 1)
+    : Array.from({ length: 12 }, (_, i) => i + 1);
 
   const { data: stats, error, isLoading } = useQuery<DashboardStats, Error>({
     queryKey: ['dashboardStats', filterType, selectedYear, selectedMonth],
     queryFn: () => getAdminDashboard({ filterType, year: selectedYear, month: filterType === 'day' ? selectedMonth : undefined }),
   });
+
+  const queryClient = useQueryClient();
+
+  const { data: pendingOrdersData, isLoading: pendingOrdersLoading } = useQuery({
+    queryKey: ['pendingOrders', pendingOrdersPage, selectedStatusFilter],
+    queryFn: () => getPendingOrders(pendingOrdersPage, 10, selectedStatusFilter),
+    enabled: showAllPendingOrders,
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ orderId, status }: { orderId: string; status: string }) => 
+      updateOrderStatus(orderId, status),
+    onSuccess: (_, variables) => {
+      // Optimistic update
+      queryClient.setQueryData(['pendingOrders', pendingOrdersPage, selectedStatusFilter], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pendingOrders: oldData.pendingOrders.map((order: any) =>
+            order._id === variables.orderId 
+              ? { ...order, status: variables.status }
+              : order
+          )
+        };
+      });
+      
+      // Invalidate queries after a delay
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['pendingOrders'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      }, 1000);
+    }
+  });
+
+  // Cập nhật selectedMonth khi selectedYear thay đổi
+  useEffect(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    // Nếu chuyển sang năm hiện tại và selectedMonth lớn hơn tháng hiện tại
+    if (selectedYear === currentYear && selectedMonth > currentMonth) {
+      setSelectedMonth(currentMonth);
+    }
+  }, [selectedYear, selectedMonth]);
+
+  // Reset page khi đóng modal đơn hàng chưa được xử lý
+  useEffect(() => {
+    if (!showAllPendingOrders) {
+      setPendingOrdersPage(1);
+    }
+  }, [showAllPendingOrders]);
 
   useEffect(() => {
     if (stats?.revenueByTime) {
@@ -201,17 +299,57 @@ const Dashboard: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'Chờ xác nhận';
+        return 'Chờ xử lý';
       case 'processing':
         return 'Đang xử lý';
       case 'shipped':
-        return 'Đang giao hàng';
+        return 'Đang giao';
       case 'delivered':
         return 'Đã giao';
       case 'cancelled':
         return 'Đã hủy';
       default:
         return status;
+    }
+  };
+
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'pending':
+        return 'processing';
+      case 'processing':
+        return 'shipped';
+      case 'shipped':
+        return 'delivered';
+      default:
+        return currentStatus;
+    }
+  };
+
+  const getNextStatusText = (currentStatus: string) => {
+    const nextStatus = getNextStatus(currentStatus);
+    return getStatusText(nextStatus);
+  };
+
+  const handleStatusUpdate = (orderId: string, currentStatus: string) => {
+    const nextStatus = getNextStatus(currentStatus);
+    if (nextStatus === currentStatus) return;
+
+    setConfirmModal({
+      isOpen: true,
+      orderId,
+      newStatus: nextStatus,
+      currentStatus
+    });
+  };
+
+  const confirmStatusUpdate = () => {
+    if (confirmModal.isOpen) {
+      updateStatusMutation.mutate({
+        orderId: confirmModal.orderId,
+        status: confirmModal.newStatus
+      });
+      setConfirmModal({ isOpen: false, orderId: '', newStatus: '', currentStatus: '' });
     }
   };
 
@@ -329,33 +467,253 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
       
-      {/* Đơn hàng mới nhất - Di chuyển xuống dưới */}
+      {/* Đơn hàng chưa được xử lý */}
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">Đơn hàng mới nhất</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-700">
+            Đơn hàng đang xử lý
+            <span className="ml-2 bg-red-100 text-red-800 text-sm font-medium px-2 py-1 rounded-full">
+              {stats?.totalPendingOrders || 0}
+            </span>
+          </h2>
+          {stats?.totalPendingOrders && stats.totalPendingOrders > 5 && (
+            <button
+              onClick={() => setShowAllPendingOrders(!showAllPendingOrders)}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            >
+              {showAllPendingOrders ? 'Thu gọn' : 'Xem tất cả'}
+            </button>
+          )}
+        </div>
+
+        {/* Filter buttons */}
+        {showAllPendingOrders && (
+          <div className="mb-4 flex gap-2">
+            <button
+              onClick={() => setSelectedStatusFilter('all')}
+              className={`px-3 py-1 text-sm rounded border ${
+                selectedStatusFilter === 'all'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Tất cả
+            </button>
+            <button
+              onClick={() => setSelectedStatusFilter('pending')}
+              className={`px-3 py-1 text-sm rounded border ${
+                selectedStatusFilter === 'pending'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Chờ xử lý
+            </button>
+            <button
+              onClick={() => setSelectedStatusFilter('processing')}
+              className={`px-3 py-1 text-sm rounded border ${
+                selectedStatusFilter === 'processing'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Đang xử lý
+            </button>
+            <button
+              onClick={() => setSelectedStatusFilter('shipped')}
+              className={`px-3 py-1 text-sm rounded border ${
+                selectedStatusFilter === 'shipped'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Đang giao
+            </button>
+          </div>
+        )}
+        
         <div className="space-y-3">
-          {stats?.latestOrders && stats.latestOrders.length > 0 ? (
-            stats.latestOrders.map((order) => (
-              <div key={order._id} className="border-b border-gray-200 pb-3 last:border-b-0">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{order.user.name}</p>
-                    <p className="text-sm text-gray-600">{order.user.email}</p>
-                    <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-green-600">{formatVND(order.totalPrice)}</p>
-                    <span className={`inline-block px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
-                      {getStatusText(order.status)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))
+          {showAllPendingOrders ? (
+            // Hiển thị tất cả đơn hàng chưa được xử lý với phân trang
+            <>
+              {pendingOrdersLoading ? (
+                <p className="text-gray-500 text-center py-4">Đang tải...</p>
+              ) : pendingOrdersData?.pendingOrders && pendingOrdersData.pendingOrders.length > 0 ? (
+                <>
+                  {pendingOrdersData.pendingOrders.map((order: any) => (
+                    <div key={order._id} className="border-b border-gray-200 pb-3 last:border-b-0">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{order.user.name}</p>
+                          <p className="text-sm text-gray-600">{order.user.email}</p>
+                          <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <p className="font-semibold text-green-600">{formatVND(order.totalPrice)}</p>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
+                              {getStatusText(order.status)}
+                            </span>
+                            {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                              <button
+                                onClick={() => handleStatusUpdate(order._id, order.status)}
+                                disabled={updateStatusMutation.isPending}
+                                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {updateStatusMutation.isPending ? 'Đang cập nhật...' : `→ ${getNextStatusText(order.status)}`}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Phân trang */}
+                  {pendingOrdersData.totalPages > 1 && (
+                    <div className="flex justify-center mt-4 gap-2">
+                      <button 
+                        onClick={() => setPendingOrdersPage(p => Math.max(1, p - 1))} 
+                        disabled={pendingOrdersPage === 1}
+                        className="px-3 py-1 rounded border bg-gray-100 disabled:opacity-50 hover:bg-gray-200"
+                      >
+                        &laquo;
+                      </button>
+                      
+                      {/* Logic phân trang gọn */}
+                      {(() => {
+                        const pages = [];
+                        const maxVisiblePages = 3; // Giảm xuống 3 để gọn hơn
+                        let startPage = Math.max(1, pendingOrdersPage - Math.floor(maxVisiblePages / 2));
+                        let endPage = Math.min(pendingOrdersData.totalPages, startPage + maxVisiblePages - 1);
+                        
+                        if (endPage - startPage + 1 < maxVisiblePages) {
+                          startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                        }
+
+                        // Thêm trang đầu nếu cần
+                        if (startPage > 1) {
+                          pages.push(
+                            <button 
+                              key={1} 
+                              onClick={() => setPendingOrdersPage(1)} 
+                              className="px-3 py-1 rounded border bg-gray-100 hover:bg-gray-200"
+                            >
+                              1
+                            </button>
+                          );
+                          
+                          if (startPage > 2) {
+                            pages.push(
+                              <span key="dots1" className="px-2 py-1 text-gray-500">...</span>
+                            );
+                          }
+                        }
+
+                        // Thêm các trang hiển thị
+                        for (let i = startPage; i <= endPage; i++) {
+                          pages.push(
+                            <button 
+                              key={i}
+                              onClick={() => setPendingOrdersPage(i)}
+                              className={`px-3 py-1 rounded border ${
+                                i === pendingOrdersPage 
+                                  ? 'bg-blue-500 text-white' 
+                                  : 'bg-gray-100 hover:bg-gray-200'
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        }
+
+                        // Thêm trang cuối nếu cần
+                        if (endPage < pendingOrdersData.totalPages) {
+                          if (endPage < pendingOrdersData.totalPages - 1) {
+                            pages.push(
+                              <span key="dots2" className="px-2 py-1 text-gray-500">...</span>
+                            );
+                          }
+                          
+                          pages.push(
+                            <button 
+                              key={pendingOrdersData.totalPages} 
+                              onClick={() => setPendingOrdersPage(pendingOrdersData.totalPages)} 
+                              className="px-3 py-1 rounded border bg-gray-100 hover:bg-gray-200"
+                            >
+                              {pendingOrdersData.totalPages}
+                            </button>
+                          );
+                        }
+
+                        return pages;
+                      })()}
+                      
+                      <button 
+                        onClick={() => setPendingOrdersPage(p => Math.min(pendingOrdersData.totalPages, p + 1))} 
+                        disabled={pendingOrdersPage === pendingOrdersData.totalPages}
+                        className="px-3 py-1 rounded border bg-gray-100 disabled:opacity-50 hover:bg-gray-200"
+                      >
+                        &raquo;
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-gray-500 text-center py-4">Không có đơn hàng chưa được xử lý</p>
+              )}
+            </>
           ) : (
-            <p className="text-gray-500 text-center py-4">Chưa có đơn hàng nào</p>
+            // Hiển thị 5 đơn hàng chưa được xử lý gần nhất
+            <>
+              {stats?.pendingOrders && stats.pendingOrders.length > 0 ? (
+                stats.pendingOrders.map((order) => (
+                  <div key={order._id} className="border-b border-gray-200 pb-3 last:border-b-0">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{order.user.name}</p>
+                        <p className="text-sm text-gray-600">{order.user.email}</p>
+                        <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-2">
+                        <p className="font-semibold text-green-600">{formatVND(order.totalPrice)}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
+                            {getStatusText(order.status)}
+                          </span>
+                          {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleStatusUpdate(order._id, order.status)}
+                              disabled={updateStatusMutation.isPending}
+                              className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {updateStatusMutation.isPending ? 'Đang cập nhật...' : `→ ${getNextStatusText(order.status)}`}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">Không có đơn hàng đang xử lý</p>
+              )}
+            </>
           )}
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title="Xác nhận cập nhật trạng thái"
+        message={`Bạn có chắc chắn muốn chuyển đơn hàng từ "${getStatusText(confirmModal.currentStatus)}" sang "${getStatusText(confirmModal.newStatus)}"?`}
+        onConfirm={confirmStatusUpdate}
+        onCancel={() => setConfirmModal({ isOpen: false, orderId: '', newStatus: '', currentStatus: '' })}
+        confirmText="Cập nhật"
+        cancelText="Hủy"
+        type="warning"
+      />
     </div>
   );
 };

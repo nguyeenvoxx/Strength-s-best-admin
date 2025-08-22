@@ -1,48 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import searchIcon from '../assets/Search1.png';
-import notiIcon from '../assets/noti.png';
-import { getNotifications, searchAll } from '../services/api';
+import { searchAll } from '../services/api';
 
 interface HeaderProps {
   onLogout: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ onLogout }) => {
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loadingNoti, setLoadingNoti] = useState(false);
-  const [errorNoti, setErrorNoti] = useState<string | null>(null);
-  const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [searchResults, setSearchResults] = useState<any | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const fetchNotifications = async () => {
-    setLoadingNoti(true);
-    setErrorNoti(null);
-    try {
-      const data = await getNotifications();
-      setNotifications(data);
-    } catch (err) {
-      setErrorNoti('Lỗi khi tải thông báo');
-    }
-    setLoadingNoti(false);
-  };
-
-  const handleOpenNotification = () => {
-    setIsNotificationOpen(!isNotificationOpen);
-    if (!isNotificationOpen) fetchNotifications();
-  };
-  const handleMarkAllRead = () => {
-    setReadIds(new Set(notifications.map(n => n.id)));
-  };
-  const handleMarkRead = (id: number) => {
-    setReadIds(prev => new Set([...prev, id]));
-  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,43 +101,6 @@ const Header: React.FC<HeaderProps> = ({ onLogout }) => {
         )}
       </div>
       <div className="flex items-center space-x-4 relative">
-        <button
-          className="text-gray-600 focus:outline-none"
-          onClick={handleOpenNotification}
-        >
-          <img src={notiIcon} alt="Thông báo" className="w-5 h-5 mx-auto" />
-        </button>
-        {isNotificationOpen && (
-          <div className="absolute right-0 mt-8 w-80 bg-white shadow-lg rounded-lg p-4 z-10" style={{ top: '100%' }}>
-            <h3 className="text-lg font-bold mb-4">Thông báo mới</h3>
-            {loadingNoti ? <div>Đang tải...</div> : errorNoti ? <div className="text-red-500">{errorNoti}</div> : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {notifications.length === 0 ? <div className="text-gray-500 text-sm">Không có thông báo mới</div> :
-                  notifications.map((notif) => (
-                    <div key={notif.id} className={`flex justify-between items-center p-2 rounded ${readIds.has(notif.id) || notif.isRead ? 'bg-gray-100 text-gray-400' : 'bg-blue-50'}`}>
-                      <div>
-                        <p className="text-sm font-semibold">{notif.message}</p>
-                        <p className="text-xs text-gray-500">{new Date(notif.createdAt).toLocaleString('vi-VN')}</p>
-                      </div>
-                      {!readIds.has(notif.id) && !notif.isRead && (
-                        <button onClick={() => handleMarkRead(notif.id)} className="text-blue-500 text-xs ml-2">Đánh dấu đã đọc</button>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            )}
-            <div className="mt-4 flex justify-between">
-              <button className="text-blue-500 text-sm" onClick={handleMarkAllRead}>Đánh dấu tất cả đã đọc</button>
-              <button className="text-blue-500 text-sm">Xem tất cả</button>
-            </div>
-            <button
-              onClick={() => setIsNotificationOpen(false)}
-              className="mt-4 w-full bg-gray-200 text-black p-1 rounded"
-            >
-              Đóng
-            </button>
-          </div>
-        )}
         <button className="bg-gray-200 text-gray-800 px-4 py-2 rounded flex items-center">
           ADMIN 
         </button>

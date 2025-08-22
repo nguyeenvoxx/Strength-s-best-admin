@@ -22,6 +22,41 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Add response interceptor to handle auth errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    console.error('❌ Response Error:', {
+      message: error.message,
+      status: error.response?.status,
+      url: error.config?.url,
+      response: error.response?.data
+    });
+    
+    if (error.response?.status === 401) {
+      const errorData = error.response?.data;
+      console.log('🔍 Token error details:', errorData);
+      
+      // Kiểm tra loại lỗi token
+      if (errorData?.code === 'TOKEN_EXPIRED' || errorData?.message?.includes('hết hạn')) {
+        console.log('⏰ Token đã hết hạn, hiển thị thông báo và logout');
+        alert('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        window.location.href = '/login';
+      } else {
+        console.log('🚫 Token không hợp lệ, logout ngay lập tức');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
 
 // Auth
@@ -457,10 +492,7 @@ export const deleteAdminReply = async (id: string, replyIndex: number) => {
   return response.data;
 };
 
-export const getNotifications = async () => {
-  const response = await api.get('/orders/notifications');
-  return response.data.data;
-};
+
 
 export const searchAll = async (query: string, type: string = 'all') => {
   const response = await api.get('/orders/search', { params: { query, type } });
@@ -469,6 +501,15 @@ export const searchAll = async (query: string, type: string = 'all') => {
 
 export const getAdminDashboard = async (params: { filterType: string; year?: number; month?: number }) => {
   const response = await api.get('/admin/dashboard', { params });
+  return response.data.data;
+};
+
+export const getPendingOrders = async (page = 1, limit = 10, status?: string) => {
+  const params: any = { page, limit };
+  if (status && status !== 'all') {
+    params.status = status;
+  }
+  const response = await api.get('/admin/pending-orders', { params });
   return response.data.data;
 };
 

@@ -78,12 +78,47 @@ const Reviews: React.FC = () => {
 
   const addReplyMutation = useMutation({
     mutationFn: ({ id, content }: { id: string; content: string }) => addAdminReply(id, content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    onSuccess: (_, variables) => {
+      // Cập nhật ngay lập tức thay vì invalidate toàn bộ
+      queryClient.setQueryData(['reviews', page], (oldData: any) => {
+        if (!oldData) return oldData;
+        
+        const updatedReviews = oldData.data?.reviews?.map((review: Review) => {
+          if (review._id === variables.id) {
+            return {
+              ...review,
+              adminReplies: [
+                ...(review.adminReplies || []),
+                {
+                  content: variables.content,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  admin: { name: 'Admin' } // Tạm thời, sẽ được cập nhật từ server
+                }
+              ]
+            };
+          }
+          return review;
+        });
+
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data,
+            reviews: updatedReviews
+          }
+        };
+      });
+
       setReplyingReviewId(null);
       setReplyContent('');
       setSuccessMsg('Phản hồi thành công!');
       setErrorMsg(null);
+      
+      // Sau đó refresh để lấy dữ liệu chính xác từ server
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      }, 1000);
     },
     onError: (err: any) => {
       setErrorMsg('Lỗi khi phản hồi: ' + (err?.response?.data?.message || 'Không xác định'));
@@ -93,13 +128,53 @@ const Reviews: React.FC = () => {
 
   const editReplyMutation = useMutation({
     mutationFn: ({ id, replyIndex, content }: { id: string; replyIndex: number; content: string }) => editAdminReply(id, replyIndex, content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    onSuccess: (_, variables) => {
+      // Cập nhật ngay lập tức
+      queryClient.setQueryData(['reviews', page], (oldData: any) => {
+        if (!oldData) return oldData;
+        
+        const updatedReviews = oldData.data?.reviews?.map((review: Review) => {
+          if (review._id === variables.id) {
+            const updatedAdminReplies = [...(review.adminReplies || [])];
+            if (variables.content.trim()) {
+              // Cập nhật phản hồi
+              updatedAdminReplies[variables.replyIndex] = {
+                ...updatedAdminReplies[variables.replyIndex],
+                content: variables.content,
+                updatedAt: new Date().toISOString()
+              };
+            } else {
+              // Xóa phản hồi nếu content rỗng
+              updatedAdminReplies.splice(variables.replyIndex, 1);
+            }
+            
+            return {
+              ...review,
+              adminReplies: updatedAdminReplies
+            };
+          }
+          return review;
+        });
+
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data,
+            reviews: updatedReviews
+          }
+        };
+      });
+
       setReplyingReviewId(null);
       setEditingReplyIndex(null);
       setReplyContent('');
       setSuccessMsg('Cập nhật phản hồi thành công!');
       setErrorMsg(null);
+      
+      // Refresh sau 1 giây để đồng bộ với server
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      }, 1000);
     },
     onError: (err: any) => {
       setErrorMsg('Lỗi khi cập nhật phản hồi: ' + (err?.response?.data?.message || 'Không xác định'));
@@ -109,13 +184,43 @@ const Reviews: React.FC = () => {
 
   const deleteReplyMutation = useMutation({
     mutationFn: ({ id, replyIndex }: { id: string; replyIndex: number }) => deleteAdminReply(id, replyIndex),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    onSuccess: (_, variables) => {
+      // Cập nhật ngay lập tức
+      queryClient.setQueryData(['reviews', page], (oldData: any) => {
+        if (!oldData) return oldData;
+        
+        const updatedReviews = oldData.data?.reviews?.map((review: Review) => {
+          if (review._id === variables.id) {
+            const updatedAdminReplies = [...(review.adminReplies || [])];
+            updatedAdminReplies.splice(variables.replyIndex, 1);
+            
+            return {
+              ...review,
+              adminReplies: updatedAdminReplies
+            };
+          }
+          return review;
+        });
+
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data,
+            reviews: updatedReviews
+          }
+        };
+      });
+
       setReplyingReviewId(null);
       setEditingReplyIndex(null);
       setReplyContent('');
       setSuccessMsg('Xóa phản hồi thành công!');
       setErrorMsg(null);
+      
+      // Refresh sau 1 giây để đồng bộ với server
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      }, 1000);
     },
     onError: (err: any) => {
       setErrorMsg('Lỗi khi xóa phản hồi: ' + (err?.response?.data?.message || 'Không xác định'));
@@ -361,7 +466,7 @@ const Reviews: React.FC = () => {
           {/* Logic phân trang gọn */}
           {(() => {
             const pages = [];
-            const maxVisiblePages = 5;
+            const maxVisiblePages = 3;
             let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
             let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
             

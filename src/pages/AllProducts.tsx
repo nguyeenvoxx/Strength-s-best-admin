@@ -81,11 +81,52 @@ const AllProducts: React.FC = () => {
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: getCategories });
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string, data: any }) => updateProduct(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+    onSuccess: (data, variables) => {
+      // Cập nhật ngay lập tức
+      queryClient.setQueryData(['products', page, filterName, filterBrand, filterCategory, filterPriceMin, filterPriceMax], (oldData: any) => {
+        if (!oldData) return oldData;
+        
+        const updatedProducts = oldData.data?.products?.map((product: Product) => {
+          if (product._id === variables.id) {
+            // Cập nhật thông tin sản phẩm từ response
+            const updatedProduct = data.data?.product || product;
+            return {
+              ...product,
+              ...updatedProduct,
+              // Đảm bảo các trường quan trọng được cập nhật
+              nameProduct: updatedProduct.nameProduct || product.nameProduct,
+              priceProduct: updatedProduct.priceProduct || product.priceProduct,
+              quantity: updatedProduct.quantity || product.quantity,
+              status: updatedProduct.status || product.status,
+              image: updatedProduct.image || product.image,
+              description: updatedProduct.description || product.description,
+              idBrand: updatedProduct.idBrand || product.idBrand,
+              idCategory: updatedProduct.idCategory || product.idCategory
+            };
+          }
+          return product;
+        });
+
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data,
+            products: updatedProducts
+          }
+        };
+      });
+
       setEditingProduct(null);
       setImageFile(null);
       setImagePreview(null);
+      
+      // Hiển thị thông báo thành công
+      alert('Cập nhật sản phẩm thành công!');
+      
+      // Refresh sau 1 giây để đồng bộ với server
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+      }, 1000);
     },
   });
   const [showEditForm, setShowEditForm] = React.useState(false);
@@ -134,6 +175,27 @@ const AllProducts: React.FC = () => {
         setSuccess(null);
         return;
       }
+
+      // Tìm sản phẩm gốc để so sánh
+      const originalProduct = products.find((p: Product) => p._id === editingProduct._id);
+      if (!originalProduct) return;
+
+      // Kiểm tra có thay đổi status không
+      const statusChanged = originalProduct.status !== editingProduct.status;
+
+      if (statusChanged) {
+        const statusText = {
+          'active': 'Đang bán',
+          'inactive': 'Vô hiệu hóa'
+        };
+        const oldStatusText = statusText[originalProduct.status as keyof typeof statusText] || originalProduct.status;
+        const newStatusText = statusText[editingProduct.status as keyof typeof statusText] || editingProduct.status;
+        
+        if (!confirm(`Bạn có chắc chắn muốn thay đổi trạng thái sản phẩm từ "${oldStatusText}" sang "${newStatusText}" không?\n\nThay đổi này sẽ ảnh hưởng đến việc hiển thị sản phẩm cho khách hàng.`)) {
+          return; // Hủy nếu user không xác nhận
+        }
+      }
+
       const { _id, ...dataToUpdate } = editingProduct;
       // Ép kiểu các trường số về number
       const formData = new FormData();
@@ -629,7 +691,7 @@ const AllProducts: React.FC = () => {
           {/* Logic phân trang gọn */}
           {(() => {
             const pages = [];
-            const maxVisiblePages = 5;
+            const maxVisiblePages = 3;
             let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
             let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
             
